@@ -13,6 +13,10 @@ import {
   cleanTags,
   exportCardsJSON,
   importCardsJSON,
+  getCollections,
+  addCollection,
+  renameCollection,
+  deleteCollection,
 } from "../lib/storage.js";
 import {
   formatDateFull,
@@ -40,14 +44,15 @@ const toastEl = document.getElementById("toast");
 
 // State.
 let allCards = [];
-let filter = { type: "all" }; // all | pinned | untagged | tag(+tag)
+let collections = [];
+let filter = { type: "all" }; // all | pinned | untagged | tag(+tag) | collection(+id)
 let selected = new Set(); // ids of checked cards
 let editingId = null;
 
 init();
 
 async function init() {
-  allCards = await getCards();
+  [allCards, collections] = await Promise.all([getCards(), getCollections()]);
   render();
 
   searchInput.addEventListener("input", render);
@@ -56,16 +61,8 @@ async function init() {
   importBtn.addEventListener("click", () => importFile.click());
   importFile.addEventListener("change", onImport);
 
-  // Sidebar filter clicks.
-  filtersEl.addEventListener("click", (e) => {
-    const btn = e.target.closest(".filter");
-    if (!btn) return;
-    filter =
-      btn.dataset.filter === "tag"
-        ? { type: "tag", tag: btn.dataset.tag }
-        : { type: btn.dataset.filter };
-    render();
-  });
+  // Sidebar clicks: manage buttons first, then plain filter selection.
+  filtersEl.addEventListener("click", onSidebarClick);
 
   // Select-all checkbox.
   selectAll.addEventListener("change", () => {
@@ -87,6 +84,58 @@ async function init() {
 }
 
 // ------------------------------------------------------------------
+// Sidebar clicks: create/rename/delete collections, or pick a filter.
+// ------------------------------------------------------------------
+async function onSidebarClick(e) {
+  // 1) Manage buttons (add / rename / delete a collection).
+  const manage = e.target.closest("[data-manage]");
+  if (manage) {
+    const kind = manage.dataset.manage;
+    const id = manage.dataset.id;
+
+    if (kind === "add-collection") {
+      const name = window.prompt("Name your new collection:");
+      if (name && name.trim()) {
+        const created = await addCollection(name);
+        collections = await getCollections();
+        if (created) filter = { type: "collection", id: created.id };
+        render();
+      }
+      return;
+    }
+    if (kind === "rename") {
+      const c = collections.find((x) => x.id === id);
+      const name = window.prompt("Rename collection:", c ? c.name : "");
+      if (name && name.trim()) {
+        await renameCollection(id, name);
+        collections = await getCollections();
+        render();
+      }
+      return;
+    }
+    if (kind === "delete") {
+      if (window.confirm("Delete this collection? Its cards are kept (just ungrouped).")) {
+        await deleteCollection(id);
+        collections = await getCollections();
+        allCards = await getCards(); // cards had their collectionId cleared
+        if (filter.type === "collection" && filter.id === id) filter = { type: "all" };
+        render();
+      }
+      return;
+    }
+  }
+
+  // 2) Plain filter selection.
+  const btn = e.target.closest(".filter");
+  if (!btn) return;
+  const type = btn.dataset.filter;
+  if (type === "tag") filter = { type: "tag", tag: btn.dataset.tag };
+  else if (type === "collection") filter = { type: "collection", id: btn.dataset.id };
+  else filter = { type };
+  render();
+}
+
+// ------------------------------------------------------------------
 // Work out which cards to show: apply the sidebar filter, the search
 // box, and the chosen sort order.
 // ------------------------------------------------------------------
@@ -97,6 +146,7 @@ function getVisible() {
     if (filter.type === "pinned" && !card.pinned) return false;
     if (filter.type === "untagged" && card.tags.length) return false;
     if (filter.type === "tag" && !card.tags.includes(filter.tag)) return false;
+    if (filter.type === "collection" && card.collectionId !== filter.id) return false;
 
     if (query) {
       const haystack = [card.title, card.url, card.text, card.note, card.tags.join(" ")]
@@ -155,6 +205,35 @@ function renderFilters() {
   filtersEl.appendChild(filterBtn("pinned", "★ Pinned", pinned, filter.type === "pinned"));
   filtersEl.appendChild(filterBtn("untagged", "Untagged", untagged, filter.type === "untagged"));
 
+  // --- Collections section (with a "+" to add one) ---
+  const collHeading = document.createElement("div");
+  collHeading.className = "filter-heading heading-row";
+  const collLabel = document.createElement("span");
+  collLabel.textContent = "Collections";
+  const addBtn = document.createElement("button");
+  addBtn.className = "mini-add";
+  addBtn.type = "button";
+  addBtn.dataset.manage = "add-collection";
+  addBtn.title = "New collection";
+  addBtn.textContent = "＋";
+  collHeading.append(collLabel, addBtn);
+  filtersEl.appendChild(collHeading);
+
+  if (collections.length === 0) {
+    const hint = document.createElement("p");
+    hint.className = "filter-hint";
+    hint.textContent = "No collections yet";
+    filtersEl.appendChild(hint);
+  }
+  const collCounts = new Map();
+  for (const card of allCards)
+    if (card.collectionId) collCounts.set(card.collectionId, (collCounts.get(card.collectionId) || 0) + 1);
+  for (const c of collections) {
+    const active = filter.type === "collection" && filter.id === c.id;
+    filtersEl.appendChild(collectionRow(c, collCounts.get(c.id) || 0, active));
+  }
+
+  // --- Tags section ---
   if (tags.length) {
     const h = document.createElement("p");
     h.className = "filter-heading";
@@ -165,6 +244,46 @@ function renderFilters() {
       filtersEl.appendChild(filterBtn("tag", tag, count, active, tag));
     }
   }
+}
+
+/** A collection row: a filter button plus tiny rename/delete controls. */
+function collectionRow(collection, count, active) {
+  const btn = document.createElement("button");
+  btn.className = "filter" + (active ? " active" : "");
+  btn.type = "button";
+  btn.dataset.filter = "collection";
+  btn.dataset.id = collection.id;
+
+  const dot = document.createElement("span");
+  dot.className = "fdot";
+  dot.style.background = collection.color;
+  btn.appendChild(dot);
+
+  const text = document.createElement("span");
+  text.className = "fname";
+  text.textContent = collection.name;
+  btn.appendChild(text);
+
+  const rename = document.createElement("span");
+  rename.className = "row-icon";
+  rename.dataset.manage = "rename";
+  rename.dataset.id = collection.id;
+  rename.title = "Rename";
+  rename.textContent = "✎";
+
+  const del = document.createElement("span");
+  del.className = "row-icon";
+  del.dataset.manage = "delete";
+  del.dataset.id = collection.id;
+  del.title = "Delete";
+  del.textContent = "✕";
+
+  const c = document.createElement("span");
+  c.className = "fcount";
+  c.textContent = count;
+
+  btn.append(rename, del, c);
+  return btn;
 }
 
 function filterBtn(type, label, count, active, tag) {
@@ -227,6 +346,16 @@ function buildCard(card) {
     "card" + (card.pinned ? " pinned" : "") + (selected.has(card.id) ? " selected" : "");
   el.dataset.id = card.id;
 
+  // Screenshot thumbnail (only when the card has one and isn't being edited).
+  if (card.thumb && editingId !== card.id) {
+    const img = document.createElement("img");
+    img.className = "card-thumb";
+    img.src = card.thumb;
+    img.alt = "";
+    img.loading = "lazy";
+    el.appendChild(img);
+  }
+
   // Head: checkbox + avatar + title/meta.
   const head = document.createElement("div");
   head.className = "card-head";
@@ -278,6 +407,18 @@ function buildCard(card) {
     note.className = "card-note";
     note.textContent = card.note;
     el.appendChild(note);
+  }
+  const collection = collections.find((c) => c.id === card.collectionId);
+  if (collection) {
+    const chip = document.createElement("div");
+    chip.className = "collection-chip";
+    const dot = document.createElement("span");
+    dot.className = "cdot";
+    dot.style.background = collection.color;
+    const name = document.createElement("span");
+    name.textContent = "🗂 " + collection.name;
+    chip.append(dot, name);
+    el.appendChild(chip);
   }
   if (card.tags.length) {
     const tags = document.createElement("div");
@@ -472,6 +613,30 @@ async function onBulk(kind) {
     return;
   }
 
+  if (kind === "move") {
+    // Type a collection name to move into (created if new). Blank = ungroup.
+    const input = window.prompt(
+      "Move selected cards to which collection?\n(Type a name — leave blank to remove from any collection.)"
+    );
+    if (input === null) return; // user cancelled
+    let collectionId = null;
+    if (input.trim()) {
+      const created = await addCollection(input);
+      collections = await getCollections();
+      collectionId = created ? created.id : null;
+    }
+    for (const card of cards) {
+      const updated = await updateCard(card.id, { collectionId });
+      if (updated) {
+        const idx = allCards.findIndex((c) => c.id === card.id);
+        if (idx > -1) allCards[idx] = updated;
+      }
+    }
+    render();
+    toast(collectionId ? `Moved ${cards.length} cards` : `Removed ${cards.length} from collection`);
+    return;
+  }
+
   if (kind === "delete") {
     if (!window.confirm(`Delete ${cards.length} selected card(s)? This can't be undone.`)) return;
     for (const id of ids) await deleteCard(id);
@@ -516,7 +681,7 @@ async function onImport(e) {
   if (!file) return;
   try {
     const { added, skipped } = await importCardsJSON(await file.text());
-    allCards = await getCards();
+    [allCards, collections] = await Promise.all([getCards(), getCollections()]);
     render();
     toast(`Imported ${added} · skipped ${skipped}`);
   } catch (err) {

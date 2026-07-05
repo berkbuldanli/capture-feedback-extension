@@ -1,58 +1,66 @@
 // storage.js
 // ------------------------------------------------------------------
-// Shared helper functions for saving and loading "cards".
-// Both the popup and the background script import these functions,
-// so all reading/writing of data lives in ONE place. That keeps the
-// rest of the code simple and avoids duplicated logic.
+// Shared helper functions for saving and loading data.
+// Everything the extension remembers lives here, in three "buckets"
+// inside chrome.storage.local (the browser's built-in local database):
 //
-// We store everything in `chrome.storage.local`, which is a small
-// database built into the browser. It:
-//   - stays on this computer only (nothing is sent anywhere),
-//   - survives browser restarts,
-//   - is shared between the popup and the background script.
+//   cards        - the captured pages (the main thing)
+//   collections  - named groups you can sort cards into
+//   settings     - small preferences (e.g. "capture screenshots?")
 //
-// Note on `chrome` vs `browser`: Chrome uses the `chrome.*` namespace.
-// Firefox understands `chrome.*` too, so using it here works on BOTH
-// browsers without any extra library.
+// storage.local stays on this computer only (nothing is sent anywhere)
+// and survives browser restarts. Chrome and Firefox both understand the
+// `chrome.*` namespace, so this file works on both browsers unchanged.
 // ------------------------------------------------------------------
 
-// The single key under which we keep the whole list of cards.
-const STORAGE_KEY = "cards";
+const CARDS_KEY = "cards";
+const COLLECTIONS_KEY = "collections";
+const SETTINGS_KEY = "settings";
+
+// Default preferences, used when the user hasn't changed anything yet.
+const DEFAULT_SETTINGS = {
+  captureScreenshots: true, // save a small thumbnail image with each card
+};
 
 /**
- * The shape of one card. Kept here as a reference:
- *   id        - unique string
- *   title     - the page title
- *   url       - the page URL
- *   text      - selected text from the page (may be empty)
- *   note      - the user's own note about this card (may be empty)
- *   tags      - array of tag words
- *   pinned    - true if the user starred it (pinned cards sort to the top)
- *   createdAt - milliseconds since 1970 (easy to sort/format)
+ * The shape of one card (for reference):
+ *   id           - unique string
+ *   title        - the page title
+ *   url          - the page URL
+ *   text         - selected text from the page (may be empty)
+ *   note         - the user's own note (may be empty)
+ *   tags         - array of tag words
+ *   collectionId - id of the collection it belongs to (or null)
+ *   thumb        - a small screenshot as a data URL (or "")
+ *   pinned       - true if starred (pinned cards sort to the top)
+ *   createdAt    - milliseconds since 1970
  */
 
-/**
- * Read every saved card.
- * @returns {Promise<Array>} newest cards first.
- */
+// ==================================================================
+// CARDS
+// ==================================================================
+
+/** Read every saved card (newest first). */
 export async function getCards() {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
-  return result[STORAGE_KEY] || [];
+  const result = await chrome.storage.local.get(CARDS_KEY);
+  return result[CARDS_KEY] || [];
 }
 
-/**
- * Overwrite the whole list of cards. Used internally by the helpers below.
- * @param {Array} cards
- */
+/** Overwrite the whole list of cards. Used internally. */
 async function setCards(cards) {
-  await chrome.storage.local.set({ [STORAGE_KEY]: cards });
+  await chrome.storage.local.set({ [CARDS_KEY]: cards });
 }
 
-/**
- * Build and save a brand new card at the top of the list.
- * @returns {Promise<Object>} the card that was saved
- */
-export async function addCard({ title, url, text = "", note = "", tags = [] }) {
+/** Build and save a brand new card at the top of the list. */
+export async function addCard({
+  title,
+  url,
+  text = "",
+  note = "",
+  tags = [],
+  collectionId = null,
+  thumb = "",
+}) {
   const card = {
     id: newId(),
     title: title || url || "Untitled",
@@ -60,22 +68,19 @@ export async function addCard({ title, url, text = "", note = "", tags = [] }) {
     text: (text || "").trim(),
     note: (note || "").trim(),
     tags: cleanTags(tags),
+    collectionId: collectionId || null,
+    thumb: thumb || "",
     pinned: false,
     createdAt: Date.now(),
   };
 
   const cards = await getCards();
-  cards.unshift(card); // put the newest card first
+  cards.unshift(card);
   await setCards(cards);
   return card;
 }
 
-/**
- * Change some fields of one card (e.g. its note or tags) and save.
- * @param {string} id
- * @param {Object} changes - any of { note, tags, pinned, title, text }
- * @returns {Promise<Object|null>} the updated card, or null if not found
- */
+/** Change some fields of one card (note, tags, collectionId, …) and save. */
 export async function updateCard(id, changes) {
   const cards = await getCards();
   const card = cards.find((c) => c.id === id);
@@ -88,10 +93,7 @@ export async function updateCard(id, changes) {
   return card;
 }
 
-/**
- * Flip a card's "pinned" star on or off.
- * @param {string} id
- */
+/** Flip a card's "pinned" star on or off. */
 export async function togglePin(id) {
   const cards = await getCards();
   const card = cards.find((c) => c.id === id);
@@ -100,51 +102,149 @@ export async function togglePin(id) {
   await setCards(cards);
 }
 
-/**
- * Delete a single card by its id.
- * @param {string} id
- */
+/** Delete a single card by its id. */
 export async function deleteCard(id) {
   const cards = await getCards();
   await setCards(cards.filter((c) => c.id !== id));
 }
 
-// ------------------------------------------------------------------
-// Export / Import — let the user back up or move their data.
-// ------------------------------------------------------------------
+// ==================================================================
+// COLLECTIONS
+// ==================================================================
 
-/**
- * Turn all cards into a pretty JSON string, ready to save as a file.
- * @returns {Promise<string>}
- */
-export async function exportCardsJSON() {
-  const cards = await getCards();
-  const payload = {
-    app: "quick-capture",
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    cards,
+/** Read all collections. */
+export async function getCollections() {
+  const result = await chrome.storage.local.get(COLLECTIONS_KEY);
+  return result[COLLECTIONS_KEY] || [];
+}
+
+async function setCollections(collections) {
+  await chrome.storage.local.set({ [COLLECTIONS_KEY]: collections });
+}
+
+/** Create a new collection and return it. Reuses one if the name exists. */
+export async function addCollection(name) {
+  const clean = String(name || "").trim();
+  if (!clean) return null;
+
+  const collections = await getCollections();
+  const existing = collections.find(
+    (c) => c.name.toLowerCase() === clean.toLowerCase()
+  );
+  if (existing) return existing;
+
+  const collection = {
+    id: newId(),
+    name: clean,
+    color: pickColor(clean),
+    createdAt: Date.now(),
   };
-  return JSON.stringify(payload, null, 2);
+  collections.push(collection);
+  await setCollections(collections);
+  return collection;
+}
+
+/** Rename a collection. */
+export async function renameCollection(id, name) {
+  const clean = String(name || "").trim();
+  if (!clean) return;
+  const collections = await getCollections();
+  const c = collections.find((x) => x.id === id);
+  if (!c) return;
+  c.name = clean;
+  await setCollections(collections);
 }
 
 /**
- * Add cards from an exported JSON string. Existing cards are kept;
- * cards whose id already exists are skipped so re-importing is safe.
- * @param {string} jsonText
- * @returns {Promise<{added: number, skipped: number}>}
+ * Delete a collection. Cards that were in it are kept but moved back to
+ * "no collection" so nothing is lost.
+ */
+export async function deleteCollection(id) {
+  const collections = await getCollections();
+  await setCollections(collections.filter((c) => c.id !== id));
+
+  const cards = await getCards();
+  let changed = false;
+  for (const card of cards) {
+    if (card.collectionId === id) {
+      card.collectionId = null;
+      changed = true;
+    }
+  }
+  if (changed) await setCards(cards);
+}
+
+// ==================================================================
+// SETTINGS
+// ==================================================================
+
+/** Read preferences, filling in any missing ones with defaults. */
+export async function getSettings() {
+  const result = await chrome.storage.local.get(SETTINGS_KEY);
+  return { ...DEFAULT_SETTINGS, ...(result[SETTINGS_KEY] || {}) };
+}
+
+/** Change one preference and save. */
+export async function setSetting(key, value) {
+  const settings = await getSettings();
+  settings[key] = value;
+  await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
+  return settings;
+}
+
+// ==================================================================
+// EXPORT / IMPORT  (cards + collections travel together)
+// ==================================================================
+
+/** Turn everything into a pretty JSON string, ready to save as a file. */
+export async function exportCardsJSON() {
+  const [cards, collections] = await Promise.all([getCards(), getCollections()]);
+  return JSON.stringify(
+    {
+      app: "quick-capture",
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      collections,
+      cards,
+    },
+    null,
+    2
+  );
+}
+
+/**
+ * Add cards (and their collections) from an exported JSON string.
+ * Existing items are kept; anything whose id already exists is skipped,
+ * so re-importing the same file is safe.
+ * @returns {Promise<{added:number, skipped:number}>}
  */
 export async function importCardsJSON(jsonText) {
   const data = JSON.parse(jsonText);
-  // Accept either the wrapped format { cards: [...] } or a bare array.
   const incoming = Array.isArray(data) ? data : data.cards;
   if (!Array.isArray(incoming)) {
     throw new Error("This file doesn't look like a Quick Capture export.");
   }
 
+  // Merge collections first (so imported cards keep their grouping).
+  if (Array.isArray(data.collections)) {
+    const collections = await getCollections();
+    const ids = new Set(collections.map((c) => c.id));
+    for (const raw of data.collections) {
+      if (raw && typeof raw === "object" && raw.id && !ids.has(raw.id)) {
+        ids.add(raw.id);
+        collections.push({
+          id: String(raw.id),
+          name: str(raw.name) || "Untitled",
+          color: str(raw.color) || pickColor(str(raw.name)),
+          createdAt: Number(raw.createdAt) || Date.now(),
+        });
+      }
+    }
+    await setCollections(collections);
+  }
+
   const cards = await getCards();
   const existingIds = new Set(cards.map((c) => c.id));
-
   let added = 0;
   let skipped = 0;
   for (const raw of incoming) {
@@ -157,14 +257,11 @@ export async function importCardsJSON(jsonText) {
     cards.push(card);
     added++;
   }
-
   await setCards(cards);
   return { added, skipped };
 }
 
-/**
- * Make sure an imported object has every field with a safe value.
- */
+/** Make sure an imported object has every field with a safe value. */
 function sanitizeCard(raw) {
   const obj = raw && typeof raw === "object" ? raw : {};
   return {
@@ -174,14 +271,16 @@ function sanitizeCard(raw) {
     text: str(obj.text),
     note: str(obj.note),
     tags: cleanTags(obj.tags || []),
+    collectionId: obj.collectionId ? String(obj.collectionId) : null,
+    thumb: typeof obj.thumb === "string" ? obj.thumb : "",
     pinned: Boolean(obj.pinned),
     createdAt: Number(obj.createdAt) || Date.now(),
   };
 }
 
-// ------------------------------------------------------------------
-// Small shared utilities.
-// ------------------------------------------------------------------
+// ==================================================================
+// Small shared utilities
+// ==================================================================
 
 /** A simple unique id: current time + a random suffix. */
 function newId() {
@@ -193,11 +292,15 @@ function str(v) {
   return v == null ? "" : String(v).trim();
 }
 
-/**
- * Tidy a list of tags: trim spaces, drop empties, lowercase, de-duplicate.
- * @param {string[]} tags
- * @returns {string[]}
- */
+/** A stable colour for a collection, derived from its name. */
+function pickColor(seed) {
+  seed = seed || "•";
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) % 360;
+  return `hsl(${hash}, 60%, 45%)`;
+}
+
+/** Tidy tags: trim, drop empties, lowercase, de-duplicate. */
 export function cleanTags(tags) {
   const seen = new Set();
   const out = [];

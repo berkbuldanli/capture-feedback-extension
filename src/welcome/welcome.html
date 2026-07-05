@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<!--
+  welcome.html
+  ----------------------------------------------------------------
+  A friendly first-run page. The background script opens this in a
+  new tab the first time the extension is installed, so brand-new
+  users immediately understand what Quick Capture does and how to
+  use it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to Quick Capture</title>
+    <link rel="stylesheet" href="welcome.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="hero">
+        <img src="../../icons/icon-128.png" alt="" class="hero-logo" />
+        <h1>Welcome to Quick Capture</h1>
+        <p class="tagline">
+          Your lightweight research notebook for the web. Save any page as a
+          tagged card — with notes, screenshots, and collections — all stored
+          privately in your browser.
+        </p>
+        <div class="cta">
+          <button id="open-dashboard" class="btn primary" type="button">Open the dashboard</button>
+          <button id="load-samples" class="btn" type="button">Load a few sample cards</button>
+        </div>
+        <p id="samples-note" class="samples-note" hidden></p>
+      </header>
+
+      <section class="section">
+        <h2>Three ways to capture</h2>
+        <div class="grid">
+          <div class="feature">
+            <div class="feature-icon">🖱️</div>
+            <h3>Click the icon</h3>
+            <p>
+              Open the toolbar popup, optionally add tags, a note, and a
+              collection, then hit <strong>Save this page</strong>.
+            </p>
+          </div>
+          <div class="feature">
+            <div class="feature-icon">✏️</div>
+            <h3>Right-click a selection</h3>
+            <p>
+              Highlight text on any page, right-click, and choose
+              <strong>Save to Quick Capture</strong> — the quote is saved too.
+            </p>
+          </div>
+          <div class="feature">
+            <div class="feature-icon">⌨️</div>
+            <h3>Keyboard shortcut</h3>
+            <p>
+              Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> on any page to
+              save it instantly, without opening anything.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>What you can do</h2>
+        <ul class="checklist">
+          <li>Organise with <strong>tags</strong> and named <strong>collections</strong></li>
+          <li>Add your own <strong>notes</strong> and a page <strong>screenshot</strong></li>
+          <li><strong>Search</strong>, <strong>filter</strong>, <strong>sort</strong>, and <strong>pin</strong> the important ones</li>
+          <li><strong>Copy as Markdown</strong> to paste into Notion, Docs, or Slack</li>
+          <li><strong>Bulk-manage</strong> many cards at once from the dashboard</li>
+          <li><strong>Export / import</strong> everything as a JSON file for backup</li>
+        </ul>
+      </section>
+
+      <section class="section privacy">
+        <h2>🔒 Private by design</h2>
+        <p>
+          Everything stays in your browser's local storage. There are no
+          accounts, no servers, and nothing is ever sent anywhere. Your
+          captures are yours.
+        </p>
+      </section>
+
+      <footer class="footer">
+        <p>Tip: pin the Quick Capture icon to your toolbar (click the 🧩 puzzle icon → pin) so it's always one click away.</p>
+      </footer>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="welcome.js"></script>
+  </body>
+</html>

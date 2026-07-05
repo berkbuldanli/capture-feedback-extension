@@ -12,18 +12,19 @@ so it runs on both **Chrome** and **Firefox** from the same code.
 
 - **Three ways to capture:** the toolbar button, the right-click menu, or the
   <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> keyboard shortcut.
-- **Tags + notes:** organise each card with tags and your own note.
-- **Find anything:** full-text search, filter by tag (chips are clickable), and
-  sort by newest/oldest.
+- **Tags, notes, screenshots & collections:** organise each card however you like.
+- **Screenshots:** save a thumbnail of the page with each card (toggle on/off).
+- **Collections:** group cards into named projects, with colour dots and counts.
+- **Find anything:** full-text search, filter by tag/collection, sort by date or title.
 - **Pin** important cards to the top with a star.
 - **Edit** a card's note and tags any time.
 - **Copy as Markdown** — one click to paste a card into Notion, Docs, or Slack.
-- **Export / Import** all your cards as a JSON file for backup or moving devices.
+- **Export / Import** cards *and* collections as a JSON file for backup.
 - **Dark mode** that follows your system theme automatically.
-- A friendly **empty state** and coloured per-site avatars.
-- **Full-page dashboard** (⛶ button in the popup) with a tag sidebar + counts,
-  a multi-column board, live stats, and **bulk actions** — select many cards
-  and tag, copy, export, or delete them all at once.
+- A friendly **welcome page** on first install (with optional sample data).
+- **Full-page dashboard** (⛶ button in the popup) with a tag/collection sidebar,
+  live stats, a multi-column board, and **bulk actions** — select many cards and
+  tag, move, copy, export, or delete them all at once.
 
 ---
 
@@ -33,19 +34,21 @@ so it runs on both **Chrome** and **Firefox** from the same code.
 capture-feedback-extension/
 ├── manifest.json          # The extension's "ID card" (name, permissions, files)
 ├── icons/                 # Toolbar icons (16, 48, 128 px)
-└── src/
-    ├── background.js       # Invisible helper: right-click menu + keyboard shortcut
-    ├── lib/
-    │   ├── storage.js      # Shared save/load functions (the "database" layer)
-    │   └── format.js       # Shared formatting helpers (dates, avatars, Markdown)
-    ├── popup/
-    │   ├── popup.html      # The window that opens when you click the icon
-    │   ├── popup.css       # How the popup looks
-    │   └── popup.js        # How the popup behaves
-    └── dashboard/
-        ├── dashboard.html  # The full-page workspace (opens in its own tab)
-        ├── dashboard.css   # How the dashboard looks
-        └── dashboard.js    # How the dashboard behaves
+├── src/
+│   ├── background.js       # Invisible helper: right-click menu + keyboard shortcut
+│   ├── lib/
+│   │   ├── storage.js      # Cards, collections & settings (the "database" layer)
+│   │   ├── format.js       # Shared formatting helpers (dates, avatars, Markdown)
+│   │   └── capture.js      # Takes + shrinks the page screenshots
+│   ├── popup/              # The small window from the toolbar icon
+│   ├── dashboard/          # The full-page workspace (opens in its own tab)
+│   └── welcome/            # The first-run onboarding page
+├── scripts/
+│   ├── build.mjs           # Packages the extension into dist/*.zip for the stores
+│   └── make-store-assets.mjs  # Regenerates the promo/screenshot images
+├── store/                 # Store listing copy + promo images
+├── TESTING.md             # Manual QA test plan
+└── LICENSE                # MIT
 ```
 
 ---
@@ -57,9 +60,9 @@ JSON files can't have comments, so here's what each part means:
 - **`manifest_version: 3`** — uses the modern extension format (required by Chrome).
 - **`name` / `version` / `description`** — shown on the extensions page and in stores.
 - **`permissions`** — what the extension may do. We keep this minimal:
-  - `storage` — save cards locally.
+  - `storage` / `unlimitedStorage` — save cards, collections, and screenshots locally.
   - `contextMenus` — add the right-click "Save to Quick Capture" item.
-  - `activeTab` — read the current tab's title/URL/selection **only when you click** the icon.
+  - `activeTab` — read the current tab's title/URL/selection and take a screenshot **only when you invoke** the extension.
   - `scripting` — run the tiny "what text is highlighted?" check inside the page.
 - **`action`** — the toolbar button and the popup it opens.
 - **`background.service_worker`** — the invisible helper (`background.js`) that powers the right-click menu and keyboard shortcut.
@@ -102,10 +105,34 @@ add-ons during development.)
 
 ---
 
+## Packaging for the stores
+
+Build a store-ready zip (no extra tools needed — just Node):
+
+```
+node scripts/build.mjs
+```
+
+This creates `dist/quick-capture-v<version>.zip` containing only the files the
+extension needs. Upload that to the Chrome Web Store or Firefox Add-ons.
+Listing copy and promo images live in `store/` (see `store/listing.md`).
+
+---
+
+## Testing
+
+See **[TESTING.md](TESTING.md)** for a full manual QA plan with step-by-step
+scenarios and a quick regression checklist.
+
+---
+
 ## Notes
 
 - **Blocked pages:** browser system pages (`chrome://…`), the extension
   gallery, and some PDF viewers don't allow extensions to read them, so
-  capturing there is disabled. Any normal website works fine.
+  capturing (and screenshots) are disabled there. Any normal website works fine.
 - **Where's my data?** In the browser's built-in `storage.local`. It stays on
   your computer and survives restarts. Removing the extension removes the data.
+- **Storage size:** screenshots make cards bigger. The `unlimitedStorage`
+  permission means you won't hit the small default quota; you can still turn
+  screenshots off with the **📷 Shot** toggle in the popup.

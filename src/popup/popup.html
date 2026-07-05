@@ -45,6 +45,22 @@
         placeholder="add a note (optional)"
         autocomplete="off"
       />
+      <div class="capture-row">
+        <select id="collection-select" aria-label="Add to collection">
+          <option value="">No collection</option>
+          <option value="__new__">＋ New collection…</option>
+        </select>
+        <label class="shot-toggle" title="Save a screenshot with the card">
+          <input type="checkbox" id="shot-toggle" />
+          <span>📷 Shot</span>
+        </label>
+      </div>
+      <!-- Inline "create collection" input (shown only when +New is picked). -->
+      <div id="new-collection-row" class="new-collection-row" hidden>
+        <input id="new-collection-input" type="text" placeholder="New collection name" autocomplete="off" />
+        <button id="new-collection-add" type="button">Add</button>
+        <button id="new-collection-cancel" type="button" class="ghost">✕</button>
+      </div>
       <button id="save-btn" type="button">＋ Save this page</button>
       <p id="capture-hint" class="hint">
         Tip: highlight text on the page first, or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> anywhere.

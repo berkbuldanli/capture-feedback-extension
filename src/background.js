@@ -1,37 +1,40 @@
 // background.js
 // ------------------------------------------------------------------
-// The "background service worker": an invisible helper that the browser
-// wakes up when something happens (a right-click menu click, or the
-// keyboard shortcut). It does NOT have a visible window.
+// The "background service worker": an invisible helper the browser wakes
+// up when something happens (a right-click menu click or the keyboard
+// shortcut). It has no visible window.
 //
 // Its jobs:
-//   1. Create the "Save to Quick Capture" right-click menu item.
-//   2. Save a card when that menu item is clicked on selected text.
-//   3. Save the current page when the keyboard shortcut is pressed.
+//   1. On install, show a friendly welcome page.
+//   2. Create the "Save to Quick Capture" right-click menu item.
+//   3. Save a card (with an optional screenshot) from the menu or shortcut.
 // ------------------------------------------------------------------
 
-import { addCard } from "./lib/storage.js";
+import { addCard, getSettings } from "./lib/storage.js";
+import { captureThumbnail } from "./lib/capture.js";
 
-// A unique id we use to recognise OUR menu item among all right-click items.
 const MENU_ID = "quick-capture-save-selection";
 
 // ------------------------------------------------------------------
-// 1) Create the right-click menu item (runs on install/update).
+// 1) On install/update: create the menu and (first install only) open
+//    the welcome page so new users know how to use the extension.
 // ------------------------------------------------------------------
-chrome.runtime.onInstalled.addListener(() => {
-  // Remove any old copy first so we never create duplicates.
+chrome.runtime.onInstalled.addListener((details) => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_ID,
       title: "Save to Quick Capture",
-      // "selection" means this item only appears when text is highlighted.
       contexts: ["selection"],
     });
   });
+
+  if (details.reason === "install") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("src/welcome/welcome.html") });
+  }
 });
 
 // ------------------------------------------------------------------
-// 2) Handle clicks on the right-click menu item.
+// 2) Right-click menu click → save selected text (+ screenshot).
 // ------------------------------------------------------------------
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== MENU_ID) return;
@@ -41,15 +44,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     url: tab?.url || info.pageUrl || "",
     text: info.selectionText || "",
     tags: [],
+    thumb: await maybeCapture(tab),
   });
 
   flashBadge();
 });
 
 // ------------------------------------------------------------------
-// 3) Handle the keyboard shortcut (defined as "quick-save" in the
-// manifest). This saves the current page — including any highlighted
-// text — without even opening the popup.
+// 3) Keyboard shortcut → save the current page (+ any selection + screenshot).
 // ------------------------------------------------------------------
 chrome.commands.onCommand.addListener(async (command) => {
   if (command !== "quick-save") return;
@@ -62,15 +64,21 @@ chrome.commands.onCommand.addListener(async (command) => {
     url: tab.url || "",
     text: await getSelectionText(tab.id),
     tags: [],
+    thumb: await maybeCapture(tab),
   });
 
   flashBadge();
 });
 
-/**
- * Ask a page for any highlighted text. Returns "" if nothing is
- * selected or the page blocks scripts (e.g. chrome:// pages).
- */
+/** Capture a thumbnail only if the user's setting allows it. */
+async function maybeCapture(tab) {
+  if (!tab?.windowId) return "";
+  const settings = await getSettings();
+  if (!settings.captureScreenshots) return "";
+  return captureThumbnail(tab.windowId);
+}
+
+/** Ask a page for any highlighted text ("" if none or the page is protected). */
 async function getSelectionText(tabId) {
   try {
     const results = await chrome.scripting.executeScript({
@@ -83,11 +91,9 @@ async function getSelectionText(tabId) {
   }
 }
 
-/**
- * Briefly show a green check badge on the toolbar icon to confirm a save.
- */
+/** Briefly show a green check badge on the toolbar icon to confirm a save. */
 function flashBadge() {
-  chrome.action.setBadgeBackgroundColor({ color: "#16a34a" }); // green
+  chrome.action.setBadgeBackgroundColor({ color: "#16a34a" });
   chrome.action.setBadgeText({ text: "✓" });
   setTimeout(() => chrome.action.setBadgeText({ text: "" }), 1500);
 }

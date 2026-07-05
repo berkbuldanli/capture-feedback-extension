@@ -14,6 +14,10 @@ import {
   cleanTags,
   exportCardsJSON,
   importCardsJSON,
+  getCollections,
+  addCollection,
+  getSettings,
+  setSetting,
 } from "../lib/storage.js";
 import {
   formatDate,
@@ -22,10 +26,17 @@ import {
   avatarLetter,
   markdownForCard,
 } from "../lib/format.js";
+import { captureThumbnail } from "../lib/capture.js";
 
 // Grab the elements we'll use, once, up front.
 const tagsInput = document.getElementById("tags-input");
 const noteInput = document.getElementById("note-input");
+const collectionSelect = document.getElementById("collection-select");
+const shotToggle = document.getElementById("shot-toggle");
+const newCollectionRow = document.getElementById("new-collection-row");
+const newCollectionInput = document.getElementById("new-collection-input");
+const newCollectionAdd = document.getElementById("new-collection-add");
+const newCollectionCancel = document.getElementById("new-collection-cancel");
 const saveBtn = document.getElementById("save-btn");
 const searchInput = document.getElementById("search");
 const tagFilter = document.getElementById("tag-filter");
@@ -42,13 +53,18 @@ const toastEl = document.getElementById("toast");
 
 // State kept in memory so searching/filtering feels instant.
 let allCards = [];
+let collections = [];
 // The id of the card currently being edited (or null if none).
 let editingId = null;
 
 init();
 
 async function init() {
-  allCards = await getCards();
+  [allCards, collections] = await Promise.all([getCards(), getCollections()]);
+  const settings = await getSettings();
+  shotToggle.checked = settings.captureScreenshots;
+
+  populateCollectionSelect();
   refreshTagFilter();
   render();
 
@@ -61,6 +77,20 @@ async function init() {
   tagsInput.addEventListener("keydown", (e) => e.key === "Enter" && onSave());
   noteInput.addEventListener("keydown", (e) => e.key === "Enter" && onSave());
 
+  // Remember the screenshot preference across sessions.
+  shotToggle.addEventListener("change", () =>
+    setSetting("captureScreenshots", shotToggle.checked)
+  );
+
+  // "＋ New collection…" reveals an inline input to create one.
+  collectionSelect.addEventListener("change", onCollectionSelectChange);
+  newCollectionAdd.addEventListener("click", createCollectionFromInput);
+  newCollectionCancel.addEventListener("click", hideNewCollectionInput);
+  newCollectionInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") createCollectionFromInput();
+    if (e.key === "Escape") hideNewCollectionInput();
+  });
+
   exportBtn.addEventListener("click", onExport);
   importBtn.addEventListener("click", () => importFile.click());
   importFile.addEventListener("change", onImport);
@@ -72,6 +102,58 @@ async function init() {
   });
 }
 
+/** Fill the collection dropdown: "No collection", each collection, then "＋ New…". */
+function populateCollectionSelect() {
+  const current = collectionSelect.value;
+  collectionSelect.replaceChildren();
+
+  const none = new Option("No collection", "");
+  collectionSelect.appendChild(none);
+
+  for (const c of collections) {
+    collectionSelect.appendChild(new Option(c.name, c.id));
+  }
+
+  collectionSelect.appendChild(new Option("＋ New collection…", "__new__"));
+
+  // Keep the previous choice if it still exists.
+  collectionSelect.value = [...collectionSelect.options].some((o) => o.value === current)
+    ? current
+    : "";
+}
+
+/** When the user picks "＋ New collection…", reveal the inline name input. */
+function onCollectionSelectChange() {
+  if (collectionSelect.value !== "__new__") {
+    hideNewCollectionInput();
+    return;
+  }
+  collectionSelect.value = ""; // don't leave the select stuck on the placeholder
+  newCollectionRow.hidden = false;
+  newCollectionInput.value = "";
+  newCollectionInput.focus();
+}
+
+/** Create the collection typed into the inline input and select it. */
+async function createCollectionFromInput() {
+  const name = newCollectionInput.value.trim();
+  if (!name) {
+    hideNewCollectionInput();
+    return;
+  }
+  const created = await addCollection(name);
+  collections = await getCollections();
+  populateCollectionSelect();
+  collectionSelect.value = created ? created.id : "";
+  hideNewCollectionInput();
+  toast(`Collection “${name}” ready`);
+}
+
+function hideNewCollectionInput() {
+  newCollectionRow.hidden = true;
+  newCollectionInput.value = "";
+}
+
 // ------------------------------------------------------------------
 // SAVE the current page as a new card.
 // ------------------------------------------------------------------
@@ -81,12 +163,19 @@ async function onSave() {
     const tab = await getActiveTab();
     if (!tab) return;
 
+    // Take a screenshot first (only if the toggle is on). Best-effort.
+    const thumb = shotToggle.checked ? await captureThumbnail(tab.windowId) : "";
+
+    const collectionId = collectionSelect.value === "__new__" ? "" : collectionSelect.value;
+
     const card = await addCard({
       title: tab.title,
       url: tab.url,
       text: await getSelectionText(tab.id),
       note: noteInput.value,
       tags: cleanTags(tagsInput.value.split(",")),
+      collectionId: collectionId || null,
+      thumb,
     });
 
     allCards.unshift(card);
@@ -235,6 +324,16 @@ function buildCardElement(card) {
   const li = document.createElement("li");
   li.className = "card" + (card.pinned ? " pinned" : "");
 
+  // --- Screenshot thumbnail (only if the card has one) ---
+  if (card.thumb && editingId !== card.id) {
+    const img = document.createElement("img");
+    img.className = "card-thumb";
+    img.src = card.thumb;
+    img.alt = "";
+    img.loading = "lazy";
+    li.appendChild(img);
+  }
+
   // --- Head: avatar + title + meta ---
   const head = document.createElement("div");
   head.className = "card-head";
@@ -287,6 +386,20 @@ function buildCardElement(card) {
     note.className = "card-note";
     note.textContent = card.note;
     li.appendChild(note);
+  }
+
+  // --- Collection chip (only if the card is in a collection) ---
+  const collection = collectionById(card.collectionId);
+  if (collection) {
+    const chip = document.createElement("div");
+    chip.className = "collection-chip";
+    const dot = document.createElement("span");
+    dot.className = "cdot";
+    dot.style.background = collection.color;
+    const name = document.createElement("span");
+    name.textContent = "🗂 " + collection.name;
+    chip.append(dot, name);
+    li.appendChild(chip);
   }
 
   // --- Tag chips (clickable to filter) ---
@@ -424,7 +537,8 @@ async function onImport(e) {
   try {
     const text = await file.text();
     const { added, skipped } = await importCardsJSON(text);
-    allCards = await getCards();
+    [allCards, collections] = await Promise.all([getCards(), getCollections()]);
+    populateCollectionSelect();
     refreshTagFilter();
     render();
     toast(`Imported ${added} · skipped ${skipped}`);
@@ -465,6 +579,11 @@ function refreshTagFilter() {
 
 function updateCount() {
   countBadge.textContent = String(allCards.length);
+}
+
+/** Look up a collection object by id (or null). */
+function collectionById(id) {
+  return id ? collections.find((c) => c.id === id) || null : null;
 }
 
 // ------------------------------------------------------------------
