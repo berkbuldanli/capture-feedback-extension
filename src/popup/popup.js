@@ -27,6 +27,7 @@ import {
   markdownForCard,
 } from "../lib/format.js";
 import { captureThumbnail } from "../lib/capture.js";
+import { initTheme, themeMeta, nextTheme, saveTheme } from "../lib/theme.js";
 
 // Grab the elements we'll use, once, up front.
 const tagsInput = document.getElementById("tags-input");
@@ -45,6 +46,7 @@ const cardsList = document.getElementById("cards");
 const emptyState = document.getElementById("empty");
 const noResults = document.getElementById("no-results");
 const countBadge = document.getElementById("count");
+const themeBtn = document.getElementById("theme-btn");
 const dashboardBtn = document.getElementById("dashboard-btn");
 const exportBtn = document.getElementById("export-btn");
 const importBtn = document.getElementById("import-btn");
@@ -59,7 +61,12 @@ let editingId = null;
 
 init();
 
+let currentTheme = "system";
+
 async function init() {
+  currentTheme = await initTheme();
+  updateThemeButton();
+
   [allCards, collections] = await Promise.all([getCards(), getCollections()]);
   const settings = await getSettings();
   shotToggle.checked = settings.captureScreenshots;
@@ -67,6 +74,12 @@ async function init() {
   populateCollectionSelect();
   refreshTagFilter();
   render();
+
+  themeBtn.addEventListener("click", async () => {
+    currentTheme = nextTheme(currentTheme);
+    await saveTheme(currentTheme);
+    updateThemeButton();
+  });
 
   saveBtn.addEventListener("click", onSave);
   searchInput.addEventListener("input", render);
@@ -584,6 +597,13 @@ function updateCount() {
 /** Look up a collection object by id (or null). */
 function collectionById(id) {
   return id ? collections.find((c) => c.id === id) || null : null;
+}
+
+/** Refresh the theme toggle button's icon + tooltip. */
+function updateThemeButton() {
+  const meta = themeMeta(currentTheme);
+  themeBtn.textContent = meta.icon;
+  themeBtn.title = meta.label + " (click to change)";
 }
 
 // ------------------------------------------------------------------

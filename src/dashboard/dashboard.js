@@ -25,10 +25,12 @@ import {
   avatarLetter,
   markdownForCard,
 } from "../lib/format.js";
+import { initTheme, themeMeta, nextTheme, saveTheme } from "../lib/theme.js";
 
 // Elements.
 const searchInput = document.getElementById("search");
 const sortSelect = document.getElementById("sort");
+const themeBtn = document.getElementById("theme-btn");
 const exportBtn = document.getElementById("export-btn");
 const importBtn = document.getElementById("import-btn");
 const importFile = document.getElementById("import-file");
@@ -51,10 +53,20 @@ let editingId = null;
 
 init();
 
+let currentTheme = "system";
+
 async function init() {
+  currentTheme = await initTheme();
+  updateThemeButton();
+
   [allCards, collections] = await Promise.all([getCards(), getCollections()]);
   render();
 
+  themeBtn.addEventListener("click", async () => {
+    currentTheme = nextTheme(currentTheme);
+    await saveTheme(currentTheme);
+    updateThemeButton();
+  });
   searchInput.addEventListener("input", render);
   sortSelect.addEventListener("change", render);
   exportBtn.addEventListener("click", () => exportCards(allCards, "all"));
@@ -701,4 +713,11 @@ function toast(message) {
   toastEl.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (toastEl.hidden = true), 1900);
+}
+
+/** Refresh the theme toggle button's icon + tooltip. */
+function updateThemeButton() {
+  const meta = themeMeta(currentTheme);
+  themeBtn.textContent = meta.icon;
+  themeBtn.title = meta.label + " (click to change)";
 }

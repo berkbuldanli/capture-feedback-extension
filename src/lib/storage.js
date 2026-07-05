@@ -20,6 +20,7 @@ const SETTINGS_KEY = "settings";
 // Default preferences, used when the user hasn't changed anything yet.
 const DEFAULT_SETTINGS = {
   captureScreenshots: true, // save a small thumbnail image with each card
+  theme: "system", // "system" | "light" | "dark"
 };
 
 /**

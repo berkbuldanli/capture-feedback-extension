@@ -218,9 +218,13 @@ Then reload the page.
 
 ## 7. Appearance
 
-**7.1 Dark mode**
+**7.1 Dark mode (auto)**
 - Steps: Set your OS to dark mode; reopen the popup and dashboard.
 - [ ] Expected: Both switch to a dark theme automatically and remain readable.
+
+**7.1b Theme toggle (manual override)**
+- Steps: Click the theme button (🖥️/☀️/🌙) in the popup or dashboard header. Cycle System → Light → Dark.
+- [ ] Expected: The colours change immediately; forcing Dark works even if your OS is in Light mode. The choice is remembered after closing/reopening, and the popup and dashboard share the same setting.
 
 **7.2 Long content**
 - Steps: Save a page with a very long title and a long highlighted paragraph.

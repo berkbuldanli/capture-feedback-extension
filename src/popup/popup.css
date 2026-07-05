@@ -26,9 +26,14 @@
   --input-bg: #ffffff;
 }
 
-/* DARK THEME (auto, follows the operating system setting) */
+/* DARK THEME.
+   Applies in two cases:
+     1) the OS is in dark mode AND the user hasn't forced light, or
+     2) the user explicitly chose dark via the theme toggle.
+   The theme toggle sets data-theme="light|dark" on <html>; leaving it
+   unset means "follow the system". */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --blue: #3b82f6;
     --blue-dark: #2563eb;
     --green: #22c55e;
@@ -46,6 +51,24 @@
     --chip-text: #bfdbfe;
     --input-bg: #1e293b;
   }
+}
+:root[data-theme="dark"] {
+  --blue: #3b82f6;
+  --blue-dark: #2563eb;
+  --green: #22c55e;
+  --red: #f87171;
+  --amber: #fbbf24;
+
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --border: #334155;
+  --border-strong: #475569;
+  --bg: #0f172a;
+  --bg-soft: #111827;
+  --card-bg: #1e293b;
+  --chip-bg: #1e3a8a;
+  --chip-text: #bfdbfe;
+  --input-bg: #1e293b;
 }
 
 * {

@@ -20,7 +20,7 @@ so it runs on both **Chrome** and **Firefox** from the same code.
 - **Edit** a card's note and tags any time.
 - **Copy as Markdown** — one click to paste a card into Notion, Docs, or Slack.
 - **Export / Import** cards *and* collections as a JSON file for backup.
-- **Dark mode** that follows your system theme automatically.
+- **Dark mode** that follows your system theme, or force **Light / Dark** with the theme toggle.
 - A friendly **welcome page** on first install (with optional sample data).
 - **Full-page dashboard** (⛶ button in the popup) with a tag/collection sidebar,
   live stats, a multi-column board, and **bulk actions** — select many cards and

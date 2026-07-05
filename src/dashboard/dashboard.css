@@ -26,8 +26,9 @@
   --active: #eff6ff;
 }
 
+/* Dark theme: auto (unless forced light) or explicitly chosen. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --blue: #3b82f6;
     --blue-dark: #2563eb;
     --green: #22c55e;
@@ -47,6 +48,26 @@
     --input-bg: #1e293b;
     --active: #172554;
   }
+}
+:root[data-theme="dark"] {
+  --blue: #3b82f6;
+  --blue-dark: #2563eb;
+  --green: #22c55e;
+  --red: #f87171;
+  --amber: #fbbf24;
+
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --border: #334155;
+  --border-strong: #475569;
+  --bg: #0b1220;
+  --panel: #0f172a;
+  --bg-soft: #111827;
+  --card-bg: #1e293b;
+  --chip-bg: #1e3a8a;
+  --chip-text: #bfdbfe;
+  --input-bg: #1e293b;
+  --active: #172554;
 }
 
 * {

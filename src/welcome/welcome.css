@@ -12,7 +12,7 @@
   --bg-soft: #f9fafb;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --blue: #3b82f6;
     --blue-dark: #2563eb;
     --green: #22c55e;
@@ -23,6 +23,17 @@
     --panel: #0f172a;
     --bg-soft: #111827;
   }
+}
+:root[data-theme="dark"] {
+  --blue: #3b82f6;
+  --blue-dark: #2563eb;
+  --green: #22c55e;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --border: #334155;
+  --bg: #0b1220;
+  --panel: #0f172a;
+  --bg-soft: #111827;
 }
 
 * {

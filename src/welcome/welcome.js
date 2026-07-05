@@ -6,6 +6,9 @@
 // ------------------------------------------------------------------
 
 import { addCard, addCollection, getCards } from "../lib/storage.js";
+import { initTheme } from "../lib/theme.js";
+
+initTheme(); // apply the saved light/dark/system preference
 
 const openDashboardBtn = document.getElementById("open-dashboard");
 const loadSamplesBtn = document.getElementById("load-samples");
