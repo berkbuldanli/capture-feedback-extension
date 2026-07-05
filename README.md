@@ -1,19 +1,26 @@
 # Quick Capture
 
-A tiny browser extension for product managers. Click the toolbar icon (or
-right-click highlighted text) to save the current page as a **card** with:
+A tiny, delightful browser extension for product managers. Click the toolbar
+icon (or right-click highlighted text, or press a keyboard shortcut) to save the
+current page as a **card** with the selected text, page title, URL, and date.
 
-- the selected text (if any),
-- the page title,
-- the URL,
-- and the date/time.
+Everything is stored **locally in your browser** — no accounts, no server, no
+external services. Built with the standard WebExtensions API and **Manifest V3**,
+so it runs on both **Chrome** and **Firefox** from the same code.
 
-Add **tags** when you save, then **search**, **filter by tag**, and **delete**
-your cards in the popup. Everything is stored **locally in your browser** — no
-accounts, no server, no external services.
+## Features
 
-Built with the standard WebExtensions API and **Manifest V3**, so it runs on
-both **Chrome** and **Firefox** from the same code.
+- **Three ways to capture:** the toolbar button, the right-click menu, or the
+  <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> keyboard shortcut.
+- **Tags + notes:** organise each card with tags and your own note.
+- **Find anything:** full-text search, filter by tag (chips are clickable), and
+  sort by newest/oldest.
+- **Pin** important cards to the top with a star.
+- **Edit** a card's note and tags any time.
+- **Copy as Markdown** — one click to paste a card into Notion, Docs, or Slack.
+- **Export / Import** all your cards as a JSON file for backup or moving devices.
+- **Dark mode** that follows your system theme automatically.
+- A friendly **empty state** and coloured per-site avatars.
 
 ---
 
@@ -47,7 +54,8 @@ JSON files can't have comments, so here's what each part means:
   - `activeTab` — read the current tab's title/URL/selection **only when you click** the icon.
   - `scripting` — run the tiny "what text is highlighted?" check inside the page.
 - **`action`** — the toolbar button and the popup it opens.
-- **`background.service_worker`** — the invisible helper (`background.js`) that powers the right-click menu.
+- **`background.service_worker`** — the invisible helper (`background.js`) that powers the right-click menu and keyboard shortcut.
+- **`commands`** — registers the <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> quick-save shortcut. You can change the key at `chrome://extensions/shortcuts`.
 - **`browser_specific_settings.gecko`** — a required add-on id for Firefox. Chrome ignores this, so one manifest works in both browsers.
 
 ---
@@ -63,10 +71,12 @@ JSON files can't have comments, so here's what each part means:
 
 **Try it:**
 - Go to any normal website (e.g. a news article).
-- Highlight some text, click the **Quick Capture** icon, type a tag like
-  `competitor`, and click **Save this page**.
-- Or highlight text, **right-click**, and choose **Save to Quick Capture**.
-- Open the popup again to search, filter by tag, and delete cards.
+- Highlight some text, click the **Quick Capture** icon, add a tag like
+  `competitor` and a note, then click **＋ Save this page**.
+- Or highlight text, **right-click** → **Save to Quick Capture**.
+- Or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> to save without opening anything.
+- Open the popup to search, filter, sort, pin, edit, copy-as-Markdown, and
+  export/import your cards.
 
 > After you change any code, return to `chrome://extensions` and click the
 > **reload** (↻) icon on the Quick Capture card to load your changes.

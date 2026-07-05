@@ -20,13 +20,23 @@
 const STORAGE_KEY = "cards";
 
 /**
+ * The shape of one card. Kept here as a reference:
+ *   id        - unique string
+ *   title     - the page title
+ *   url       - the page URL
+ *   text      - selected text from the page (may be empty)
+ *   note      - the user's own note about this card (may be empty)
+ *   tags      - array of tag words
+ *   pinned    - true if the user starred it (pinned cards sort to the top)
+ *   createdAt - milliseconds since 1970 (easy to sort/format)
+ */
+
+/**
  * Read every saved card.
  * @returns {Promise<Array>} newest cards first.
  */
 export async function getCards() {
-  // storage.local.get returns an object like { cards: [...] }.
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  // If nothing has been saved yet, default to an empty list.
   return result[STORAGE_KEY] || [];
 }
 
@@ -40,22 +50,18 @@ async function setCards(cards) {
 
 /**
  * Build and save a brand new card at the top of the list.
- * @param {Object} data
- * @param {string} data.title  - the page title
- * @param {string} data.url    - the page URL
- * @param {string} [data.text] - selected text (may be empty)
- * @param {string[]} [data.tags] - list of tag words
  * @returns {Promise<Object>} the card that was saved
  */
-export async function addCard({ title, url, text = "", tags = [] }) {
+export async function addCard({ title, url, text = "", note = "", tags = [] }) {
   const card = {
-    // A simple unique id: current time + a random suffix.
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: newId(),
     title: title || url || "Untitled",
     url: url || "",
     text: (text || "").trim(),
+    note: (note || "").trim(),
     tags: cleanTags(tags),
-    createdAt: Date.now(), // milliseconds since 1970 — easy to sort/format
+    pinned: false,
+    createdAt: Date.now(),
   };
 
   const cards = await getCards();
@@ -65,12 +71,126 @@ export async function addCard({ title, url, text = "", tags = [] }) {
 }
 
 /**
+ * Change some fields of one card (e.g. its note or tags) and save.
+ * @param {string} id
+ * @param {Object} changes - any of { note, tags, pinned, title, text }
+ * @returns {Promise<Object|null>} the updated card, or null if not found
+ */
+export async function updateCard(id, changes) {
+  const cards = await getCards();
+  const card = cards.find((c) => c.id === id);
+  if (!card) return null;
+
+  if ("tags" in changes) changes.tags = cleanTags(changes.tags);
+  Object.assign(card, changes);
+
+  await setCards(cards);
+  return card;
+}
+
+/**
+ * Flip a card's "pinned" star on or off.
+ * @param {string} id
+ */
+export async function togglePin(id) {
+  const cards = await getCards();
+  const card = cards.find((c) => c.id === id);
+  if (!card) return;
+  card.pinned = !card.pinned;
+  await setCards(cards);
+}
+
+/**
  * Delete a single card by its id.
  * @param {string} id
  */
 export async function deleteCard(id) {
   const cards = await getCards();
   await setCards(cards.filter((c) => c.id !== id));
+}
+
+// ------------------------------------------------------------------
+// Export / Import — let the user back up or move their data.
+// ------------------------------------------------------------------
+
+/**
+ * Turn all cards into a pretty JSON string, ready to save as a file.
+ * @returns {Promise<string>}
+ */
+export async function exportCardsJSON() {
+  const cards = await getCards();
+  const payload = {
+    app: "quick-capture",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    cards,
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
+/**
+ * Add cards from an exported JSON string. Existing cards are kept;
+ * cards whose id already exists are skipped so re-importing is safe.
+ * @param {string} jsonText
+ * @returns {Promise<{added: number, skipped: number}>}
+ */
+export async function importCardsJSON(jsonText) {
+  const data = JSON.parse(jsonText);
+  // Accept either the wrapped format { cards: [...] } or a bare array.
+  const incoming = Array.isArray(data) ? data : data.cards;
+  if (!Array.isArray(incoming)) {
+    throw new Error("This file doesn't look like a Quick Capture export.");
+  }
+
+  const cards = await getCards();
+  const existingIds = new Set(cards.map((c) => c.id));
+
+  let added = 0;
+  let skipped = 0;
+  for (const raw of incoming) {
+    const card = sanitizeCard(raw);
+    if (existingIds.has(card.id)) {
+      skipped++;
+      continue;
+    }
+    existingIds.add(card.id);
+    cards.push(card);
+    added++;
+  }
+
+  await setCards(cards);
+  return { added, skipped };
+}
+
+/**
+ * Make sure an imported object has every field with a safe value.
+ */
+function sanitizeCard(raw) {
+  const obj = raw && typeof raw === "object" ? raw : {};
+  return {
+    id: typeof obj.id === "string" && obj.id ? obj.id : newId(),
+    title: str(obj.title) || str(obj.url) || "Untitled",
+    url: str(obj.url),
+    text: str(obj.text),
+    note: str(obj.note),
+    tags: cleanTags(obj.tags || []),
+    pinned: Boolean(obj.pinned),
+    createdAt: Number(obj.createdAt) || Date.now(),
+  };
+}
+
+// ------------------------------------------------------------------
+// Small shared utilities.
+// ------------------------------------------------------------------
+
+/** A simple unique id: current time + a random suffix. */
+function newId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Coerce anything to a trimmed string. */
+function str(v) {
+  return v == null ? "" : String(v).trim();
 }
 
 /**

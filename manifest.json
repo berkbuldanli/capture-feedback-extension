@@ -27,6 +27,15 @@
     "type": "module"
   },
 
+  "commands": {
+    "quick-save": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Quick-save the current page to Quick Capture"
+    }
+  },
+
   "browser_specific_settings": {
     "gecko": {
       "id": "quick-capture@berkbuldanli.example",

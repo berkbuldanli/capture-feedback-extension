@@ -1,40 +1,86 @@
 /* popup.css
    ----------------------------------------------------------------
-   Styling for the popup window. Comments explain the big pieces so
-   you can tweak colours and sizes as you learn.
+   Styling for the popup. Colours live in CSS variables at the top so
+   you can re-theme everything in one place. There's a light theme and
+   a dark theme (the dark one turns on automatically if your computer
+   is set to dark mode).
    ---------------------------------------------------------------- */
 
-/* CSS variables = named values we reuse below. Change these to
-   re-theme the whole popup in one place. */
+/* LIGHT THEME (default) */
 :root {
   --blue: #2563eb;
   --blue-dark: #1d4ed8;
   --green: #16a34a;
+  --red: #dc2626;
+  --amber: #f59e0b;
+
   --text: #1f2937;
   --muted: #6b7280;
   --border: #e5e7eb;
+  --border-strong: #cbd5e1;
   --bg: #ffffff;
+  --bg-soft: #f9fafb;
+  --card-bg: #ffffff;
   --chip-bg: #eff6ff;
   --chip-text: #1d4ed8;
+  --input-bg: #ffffff;
 }
 
-/* The popup has no fixed size by default, so we set one. */
+/* DARK THEME (auto, follows the operating system setting) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --blue: #3b82f6;
+    --blue-dark: #2563eb;
+    --green: #22c55e;
+    --red: #f87171;
+    --amber: #fbbf24;
+
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --border: #334155;
+    --border-strong: #475569;
+    --bg: #0f172a;
+    --bg-soft: #111827;
+    --card-bg: #1e293b;
+    --chip-bg: #1e3a8a;
+    --chip-text: #bfdbfe;
+    --input-bg: #1e293b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
-  width: 360px;
-  max-height: 560px;
+  width: 380px;
+  max-height: 580px;
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
+  display: flex;
+  flex-direction: column;
 }
 
-/* Header with logo + title */
+kbd {
+  font-family: inherit;
+  font-size: 0.85em;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* ---------- Header ---------- */
 .header {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
 }
 .header .logo {
   width: 22px;
@@ -44,42 +90,82 @@ body {
   font-size: 16px;
   margin: 0;
 }
+.count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--chip-text);
+  background: var(--chip-bg);
+  border-radius: 999px;
+  padding: 1px 9px;
+  min-width: 20px;
+  text-align: center;
+}
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+.icon-btn {
+  font-size: 16px;
+  line-height: 1;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
 
-/* Shared padding for the sections */
+/* ---------- Save + controls sections ---------- */
 .capture,
 .controls {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
 }
 
-/* Text inputs and the tag dropdown */
 input,
-select {
+select,
+textarea {
   font: inherit;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-sizing: border-box;
   width: 100%;
+  color: var(--text);
+  background: var(--input-bg);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
 }
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid var(--blue);
   outline-offset: 0;
   border-color: var(--blue);
 }
 
-/* The main blue "Save this page" button */
+.capture #note-input {
+  margin-top: 8px;
+}
+
 #save-btn {
   margin-top: 8px;
   width: 100%;
-  padding: 9px 12px;
+  padding: 10px 12px;
   color: #fff;
   background: var(--blue);
   border: none;
   border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
 #save-btn:hover {
   background: var(--blue-dark);
@@ -95,33 +181,71 @@ select:focus {
   color: var(--muted);
 }
 
-/* Put the search box and tag dropdown side by side */
 .controls {
   display: flex;
   gap: 8px;
 }
 .controls #search {
-  flex: 2;
+  flex: 2 1 auto;
+  min-width: 0;
 }
-.controls #tag-filter {
-  flex: 1;
+.controls #tag-filter,
+.controls #sort {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
-/* The scrollable card list */
+/* ---------- Card list ---------- */
+main {
+  overflow-y: auto;
+  flex: 1;
+}
 .cards {
   list-style: none;
   margin: 0;
-  padding: 8px 14px 14px;
-  overflow-y: auto;
-  max-height: 320px;
+  padding: 10px 14px 14px;
 }
 
-/* One saved card */
 .card {
+  position: relative;
+  background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 12px;
+  padding: 12px;
   margin-bottom: 10px;
+  animation: pop-in 0.18s ease;
+}
+.card.pinned {
+  border-color: var(--amber);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.card-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+/* Coloured circle with the site's first letter (fully offline). */
+.avatar {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+}
+.card-headings {
+  min-width: 0;
+  flex: 1;
 }
 .card-title {
   font-weight: 600;
@@ -140,54 +264,165 @@ select:focus {
 .card-meta {
   font-size: 11px;
   color: var(--muted);
-  margin: 0 0 6px;
+  margin: 0;
 }
-/* The saved selected text, shown in a quote-like block */
+
 .card-text {
   font-size: 13px;
-  color: #374151;
-  margin: 0 0 8px;
+  color: var(--text);
+  margin: 8px 0 0;
   padding-left: 8px;
-  border-left: 3px solid var(--border);
+  border-left: 3px solid var(--border-strong);
   white-space: pre-wrap;
   word-break: break-word;
 }
+.card-note {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+  margin: 8px 0 0;
+  word-break: break-word;
+}
 
-/* Tag chips */
 .tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-top: 8px;
 }
 .tag {
   font-size: 11px;
   background: var(--chip-bg);
   color: var(--chip-text);
-  padding: 2px 8px;
+  padding: 2px 9px;
   border-radius: 999px;
-}
-
-/* Delete button on each card */
-.card-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-.delete-btn {
-  font-size: 12px;
-  color: #b91c1c;
-  background: none;
   border: none;
   cursor: pointer;
-  padding: 2px 4px;
 }
-.delete-btn:hover {
+.tag:hover {
+  filter: brightness(0.95);
   text-decoration: underline;
 }
 
+/* Row of small action buttons at the bottom of each card. */
+.card-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.act {
+  font-size: 12px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 6px;
+}
+.act:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+.act.danger:hover {
+  color: var(--red);
+}
+.act.star.on {
+  color: var(--amber);
+}
+.act.spacer {
+  margin-left: auto;
+  pointer-events: none;
+}
+
+/* ---------- Inline edit form ---------- */
+.edit-form {
+  margin-top: 10px;
+}
+.edit-form textarea {
+  resize: vertical;
+  min-height: 48px;
+}
+.edit-form .edit-row {
+  margin-top: 6px;
+}
+.edit-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.btn-primary,
+.btn-ghost {
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+}
+.btn-ghost {
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+/* ---------- Empty states ---------- */
 .empty {
   text-align: center;
   color: var(--muted);
+  padding: 26px 20px;
+}
+.empty-art {
+  display: block;
+  margin: 0 auto 10px;
+}
+.empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 2px;
+}
+.empty-sub {
   font-size: 13px;
-  padding: 24px 14px;
+  margin: 0 0 14px;
+}
+.empty-tips {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto;
+  max-width: 280px;
+  text-align: left;
+  font-size: 12.5px;
+  line-height: 1.9;
+}
+.empty-tips li {
+  padding-left: 18px;
+  position: relative;
+}
+.empty-tips li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--blue);
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  animation: pop-in 0.18s ease;
+  z-index: 10;
 }

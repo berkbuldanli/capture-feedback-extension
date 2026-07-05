@@ -1,27 +1,42 @@
 // popup.js
 // ------------------------------------------------------------------
-// Runs when the popup window opens. It wires up the buttons, reads
-// and displays saved cards, and handles searching, filtering,
-// saving, and deleting.
+// Runs when the popup opens. It wires up every button and draws the
+// list of saved cards, with searching, filtering, sorting, editing,
+// pinning, copying, deleting, and export/import.
 // ------------------------------------------------------------------
 
-import { getCards, addCard, deleteCard, cleanTags } from "../lib/storage.js";
+import {
+  getCards,
+  addCard,
+  updateCard,
+  togglePin,
+  deleteCard,
+  cleanTags,
+  exportCardsJSON,
+  importCardsJSON,
+} from "../lib/storage.js";
 
-// Grab the page elements we'll work with, once, up front.
+// Grab the elements we'll use, once, up front.
 const tagsInput = document.getElementById("tags-input");
+const noteInput = document.getElementById("note-input");
 const saveBtn = document.getElementById("save-btn");
 const searchInput = document.getElementById("search");
 const tagFilter = document.getElementById("tag-filter");
+const sortSelect = document.getElementById("sort");
 const cardsList = document.getElementById("cards");
-const emptyMsg = document.getElementById("empty");
+const emptyState = document.getElementById("empty");
+const noResults = document.getElementById("no-results");
+const countBadge = document.getElementById("count");
+const exportBtn = document.getElementById("export-btn");
+const importBtn = document.getElementById("import-btn");
+const importFile = document.getElementById("import-file");
+const toastEl = document.getElementById("toast");
 
-// A copy of all cards kept in memory so searching/filtering is instant
-// (we only re-read storage after we add or delete something).
+// State kept in memory so searching/filtering feels instant.
 let allCards = [];
+// The id of the card currently being edited (or null if none).
+let editingId = null;
 
-// ------------------------------------------------------------------
-// Startup: load cards and set up event listeners.
-// ------------------------------------------------------------------
 init();
 
 async function init() {
@@ -32,15 +47,19 @@ async function init() {
   saveBtn.addEventListener("click", onSave);
   searchInput.addEventListener("input", render);
   tagFilter.addEventListener("change", render);
+  sortSelect.addEventListener("change", render);
 
-  // Pressing Enter in the tags box also saves — a small convenience.
-  tagsInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") onSave();
-  });
+  // Pressing Enter in either save field saves.
+  tagsInput.addEventListener("keydown", (e) => e.key === "Enter" && onSave());
+  noteInput.addEventListener("keydown", (e) => e.key === "Enter" && onSave());
+
+  exportBtn.addEventListener("click", onExport);
+  importBtn.addEventListener("click", () => importFile.click());
+  importFile.addEventListener("change", onImport);
 }
 
 // ------------------------------------------------------------------
-// SAVE: capture the current page as a new card.
+// SAVE the current page as a new card.
 // ------------------------------------------------------------------
 async function onSave() {
   saveBtn.disabled = true;
@@ -48,91 +67,126 @@ async function onSave() {
     const tab = await getActiveTab();
     if (!tab) return;
 
-    // Try to read any text the user highlighted on the page.
-    const selectedText = await getSelectionText(tab.id);
-
-    // Turn the "a, b, c" text box into a clean list of tags.
-    const tags = cleanTags(tagsInput.value.split(","));
-
     const card = await addCard({
       title: tab.title,
       url: tab.url,
-      text: selectedText,
-      tags,
+      text: await getSelectionText(tab.id),
+      note: noteInput.value,
+      tags: cleanTags(tagsInput.value.split(",")),
     });
 
-    // Update our in-memory list and the screen.
     allCards.unshift(card);
     tagsInput.value = "";
+    noteInput.value = "";
     refreshTagFilter();
     render();
+    toast("Saved ✓");
   } catch (err) {
     console.error("Quick Capture: could not save this page.", err);
-    alert("Sorry — this page can't be captured (some browser pages are blocked).");
+    toast("Can't capture this page");
   } finally {
     saveBtn.disabled = false;
   }
 }
 
-/**
- * Find the tab the user is currently looking at.
- */
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
 }
 
 /**
- * Ask the current page for any highlighted text.
- * We run a tiny function inside the page using the `scripting` API.
- * Returns "" if nothing is selected or the page is protected.
+ * Ask the current page for any highlighted text. Returns "" if nothing
+ * is selected or the page blocks scripts (chrome://, PDFs, etc.).
  */
 async function getSelectionText(tabId) {
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
-      // This function runs INSIDE the web page, not in the popup.
       func: () => window.getSelection().toString(),
     });
     return results?.[0]?.result || "";
   } catch {
-    // Some pages (chrome://, the Web Store, PDFs) block script injection.
     return "";
   }
 }
 
 // ------------------------------------------------------------------
-// DELETE: remove one card (handled by listening on the whole list).
+// One click listener for the whole card list. We look at which button
+// was clicked (via its data-action) and act accordingly. This is
+// simpler than attaching a listener to every button.
 // ------------------------------------------------------------------
 cardsList.addEventListener("click", async (e) => {
-  const btn = e.target.closest(".delete-btn");
+  const btn = e.target.closest("[data-action]");
   if (!btn) return;
   const id = btn.dataset.id;
-  await deleteCard(id);
-  allCards = allCards.filter((c) => c.id !== id);
-  refreshTagFilter();
-  render();
+  const action = btn.dataset.action;
+
+  if (action === "filter-tag") {
+    tagFilter.value = btn.dataset.tag;
+    render();
+    return;
+  }
+  if (action === "pin") {
+    await togglePin(id);
+    const c = allCards.find((x) => x.id === id);
+    if (c) c.pinned = !c.pinned;
+    render();
+    return;
+  }
+  if (action === "copy") {
+    const card = allCards.find((x) => x.id === id);
+    if (card) await copyAsMarkdown(card);
+    return;
+  }
+  if (action === "delete") {
+    await deleteCard(id);
+    allCards = allCards.filter((c) => c.id !== id);
+    if (editingId === id) editingId = null;
+    refreshTagFilter();
+    render();
+    toast("Deleted");
+    return;
+  }
+  if (action === "edit") {
+    editingId = id;
+    render();
+    return;
+  }
+  if (action === "cancel-edit") {
+    editingId = null;
+    render();
+    return;
+  }
+  if (action === "save-edit") {
+    const li = btn.closest(".card");
+    const note = li.querySelector(".edit-note").value;
+    const tags = cleanTags(li.querySelector(".edit-tags").value.split(","));
+    const updated = await updateCard(id, { note, tags });
+    if (updated) {
+      const idx = allCards.findIndex((c) => c.id === id);
+      if (idx > -1) allCards[idx] = updated;
+    }
+    editingId = null;
+    refreshTagFilter();
+    render();
+    toast("Updated ✓");
+    return;
+  }
 });
 
 // ------------------------------------------------------------------
-// RENDER: draw the cards that match the search box + tag filter.
+// RENDER the cards that match the search box, tag filter, and sort.
 // ------------------------------------------------------------------
 function render() {
+  updateCount();
+
   const query = searchInput.value.trim().toLowerCase();
   const activeTag = tagFilter.value;
 
-  const visible = allCards.filter((card) => {
-    // Tag filter: card must contain the selected tag (if one is chosen).
+  let visible = allCards.filter((card) => {
     if (activeTag && !card.tags.includes(activeTag)) return false;
-
-    // Search: match against title, url, text, and tags.
     if (query) {
-      const haystack = [
-        card.title,
-        card.url,
-        card.text,
-        card.tags.join(" "),
-      ]
+      const haystack = [card.title, card.url, card.text, card.note, card.tags.join(" ")]
         .join(" ")
         .toLowerCase();
       if (!haystack.includes(query)) return false;
@@ -140,18 +194,18 @@ function render() {
     return true;
   });
 
-  // Clear the list, then rebuild it.
+  // Pinned cards always float to the top; then apply the chosen order.
+  const newestFirst = sortSelect.value !== "oldest";
+  visible = visible.slice().sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return newestFirst ? b.createdAt - a.createdAt : a.createdAt - b.createdAt;
+  });
+
   cardsList.replaceChildren();
 
-  // Show a friendly message when there's nothing to display.
-  emptyMsg.hidden = visible.length > 0;
-  if (visible.length === 0) {
-    emptyMsg.textContent =
-      allCards.length === 0
-        ? "No cards yet. Save this page to get started!"
-        : "No cards match your search.";
-    return;
-  }
+  // Decide which "nothing here" message (if any) to show.
+  emptyState.hidden = allCards.length !== 0;
+  noResults.hidden = !(allCards.length > 0 && visible.length === 0);
 
   for (const card of visible) {
     cardsList.appendChild(buildCardElement(card));
@@ -159,32 +213,53 @@ function render() {
 }
 
 /**
- * Build the HTML for a single card using safe DOM methods.
- * We use textContent (not innerHTML) so page titles/quotes can never
- * inject unwanted markup.
+ * Build one card — either the normal view or the inline edit form.
+ * We use textContent (not innerHTML) for anything that came from a web
+ * page so titles/quotes can never inject unwanted markup.
  */
 function buildCardElement(card) {
   const li = document.createElement("li");
-  li.className = "card";
+  li.className = "card" + (card.pinned ? " pinned" : "");
 
-  // Title (links to the original page).
+  // --- Head: avatar + title + meta ---
+  const head = document.createElement("div");
+  head.className = "card-head";
+
+  const avatar = document.createElement("div");
+  avatar.className = "avatar";
+  const domain = shortUrl(card.url);
+  avatar.textContent = (domain[0] || card.title[0] || "•");
+  avatar.style.background = avatarColor(domain || card.title);
+  head.appendChild(avatar);
+
+  const headings = document.createElement("div");
+  headings.className = "card-headings";
+
   const title = document.createElement("p");
   title.className = "card-title";
   const link = document.createElement("a");
-  link.href = card.url;
-  link.target = "_blank";       // open in a new tab
+  link.href = card.url || "#";
+  link.target = "_blank";
   link.rel = "noopener";
   link.textContent = card.title;
   title.appendChild(link);
-  li.appendChild(title);
+  headings.appendChild(title);
 
-  // Meta line: date + shortened URL.
   const meta = document.createElement("p");
   meta.className = "card-meta";
-  meta.textContent = `${formatDate(card.createdAt)} · ${shortUrl(card.url)}`;
-  li.appendChild(meta);
+  meta.textContent = `${formatDate(card.createdAt)} · ${domain}`;
+  headings.appendChild(meta);
 
-  // Selected text (only if there is any).
+  head.appendChild(headings);
+  li.appendChild(head);
+
+  // If this card is being edited, show the form instead of the details.
+  if (editingId === card.id) {
+    li.appendChild(buildEditForm(card));
+    return li;
+  }
+
+  // --- Selected text ---
   if (card.text) {
     const text = document.createElement("p");
     text.className = "card-text";
@@ -192,43 +267,176 @@ function buildCardElement(card) {
     li.appendChild(text);
   }
 
-  // Tag chips (only if there are any).
+  // --- User note ---
+  if (card.note) {
+    const note = document.createElement("p");
+    note.className = "card-note";
+    note.textContent = card.note;
+    li.appendChild(note);
+  }
+
+  // --- Tag chips (clickable to filter) ---
   if (card.tags.length) {
     const tags = document.createElement("div");
     tags.className = "tags";
     for (const t of card.tags) {
-      const chip = document.createElement("span");
+      const chip = document.createElement("button");
       chip.className = "tag";
+      chip.type = "button";
+      chip.dataset.action = "filter-tag";
+      chip.dataset.tag = t;
       chip.textContent = t;
       tags.appendChild(chip);
     }
     li.appendChild(tags);
   }
 
-  // Delete button.
-  const actions = document.createElement("div");
-  actions.className = "card-actions";
-  const del = document.createElement("button");
-  del.className = "delete-btn";
-  del.type = "button";
-  del.dataset.id = card.id; // remember which card this deletes
-  del.textContent = "Delete";
-  actions.appendChild(del);
-  li.appendChild(actions);
+  // --- Action row ---
+  li.appendChild(
+    buildActions(card, [
+      { action: "pin", label: card.pinned ? "★ Pinned" : "☆ Pin", cls: "star" + (card.pinned ? " on" : "") },
+      { action: "copy", label: "⧉ Copy" },
+      { action: "edit", label: "✎ Edit" },
+      { spacer: true },
+      { action: "delete", label: "🗑 Delete", cls: "danger" },
+    ])
+  );
 
   return li;
+}
+
+/** Build the inline edit form (note + tags). */
+function buildEditForm(card) {
+  const form = document.createElement("div");
+  form.className = "edit-form";
+
+  const note = document.createElement("textarea");
+  note.className = "edit-note";
+  note.placeholder = "Note";
+  note.value = card.note;
+  form.appendChild(note);
+
+  const tagsWrap = document.createElement("div");
+  tagsWrap.className = "edit-row";
+  const tags = document.createElement("input");
+  tags.className = "edit-tags";
+  tags.type = "text";
+  tags.placeholder = "tags, comma separated";
+  tags.value = card.tags.join(", ");
+  tagsWrap.appendChild(tags);
+  form.appendChild(tagsWrap);
+
+  const actions = document.createElement("div");
+  actions.className = "edit-actions";
+  const save = document.createElement("button");
+  save.className = "btn-primary";
+  save.type = "button";
+  save.dataset.action = "save-edit";
+  save.dataset.id = card.id;
+  save.textContent = "Save";
+  const cancel = document.createElement("button");
+  cancel.className = "btn-ghost";
+  cancel.type = "button";
+  cancel.dataset.action = "cancel-edit";
+  cancel.dataset.id = card.id;
+  cancel.textContent = "Cancel";
+  actions.append(save, cancel);
+  form.appendChild(actions);
+
+  return form;
+}
+
+/** Build a row of small action buttons from a simple description list. */
+function buildActions(card, items) {
+  const row = document.createElement("div");
+  row.className = "card-actions";
+  for (const item of items) {
+    const btn = document.createElement("button");
+    if (item.spacer) {
+      btn.className = "act spacer";
+      btn.tabIndex = -1;
+      btn.setAttribute("aria-hidden", "true");
+    } else {
+      btn.className = "act" + (item.cls ? " " + item.cls : "");
+      btn.type = "button";
+      btn.dataset.action = item.action;
+      btn.dataset.id = card.id;
+      btn.textContent = item.label;
+    }
+    row.appendChild(btn);
+  }
+  return row;
+}
+
+// ------------------------------------------------------------------
+// Copy a card to the clipboard as Markdown (great for pasting into
+// Notion, Google Docs, Slack, etc.).
+// ------------------------------------------------------------------
+async function copyAsMarkdown(card) {
+  const lines = [`### ${card.title}`, card.url];
+  if (card.text) lines.push("", `> ${card.text.replace(/\n/g, "\n> ")}`);
+  if (card.note) lines.push("", `_${card.note}_`);
+  if (card.tags.length) lines.push("", card.tags.map((t) => `#${t}`).join(" "));
+  lines.push("", `_Saved ${formatDate(card.createdAt)}_`);
+
+  try {
+    await navigator.clipboard.writeText(lines.join("\n"));
+    toast("Copied as Markdown");
+  } catch {
+    toast("Couldn't copy");
+  }
+}
+
+// ------------------------------------------------------------------
+// Export all cards as a downloadable .json file.
+// ------------------------------------------------------------------
+async function onExport() {
+  if (allCards.length === 0) {
+    toast("Nothing to export yet");
+    return;
+  }
+  const json = await exportCardsJSON();
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  a.href = url;
+  a.download = `quick-capture-${date}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`Exported ${allCards.length} card${allCards.length === 1 ? "" : "s"}`);
+}
+
+// ------------------------------------------------------------------
+// Import cards from a .json file the user picks.
+// ------------------------------------------------------------------
+async function onImport(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const { added, skipped } = await importCardsJSON(text);
+    allCards = await getCards();
+    refreshTagFilter();
+    render();
+    toast(`Imported ${added} · skipped ${skipped}`);
+  } catch (err) {
+    console.error("Quick Capture: import failed.", err);
+    toast("Import failed — is it a valid export?");
+  } finally {
+    // Reset so picking the same file again still fires "change".
+    importFile.value = "";
+  }
 }
 
 // ------------------------------------------------------------------
 // Rebuild the tag dropdown from the tags that actually exist.
 // ------------------------------------------------------------------
 function refreshTagFilter() {
-  const previous = tagFilter.value; // keep the user's current choice if possible
+  const previous = tagFilter.value;
 
   const allTags = new Set();
-  for (const card of allCards) {
-    for (const t of card.tags) allTags.add(t);
-  }
+  for (const card of allCards) for (const t of card.tags) allTags.add(t);
   const sorted = [...allTags].sort();
 
   tagFilter.replaceChildren();
@@ -244,8 +452,22 @@ function refreshTagFilter() {
     tagFilter.appendChild(opt);
   }
 
-  // Restore the previous selection if that tag still exists.
   tagFilter.value = sorted.includes(previous) ? previous : "";
+}
+
+function updateCount() {
+  countBadge.textContent = String(allCards.length);
+}
+
+// ------------------------------------------------------------------
+// A small "toast" message that appears briefly at the bottom.
+// ------------------------------------------------------------------
+let toastTimer = null;
+function toast(message) {
+  toastEl.textContent = message;
+  toastEl.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (toastEl.hidden = true), 1800);
 }
 
 // ------------------------------------------------------------------
@@ -254,8 +476,7 @@ function refreshTagFilter() {
 
 /** Turn a millisecond timestamp into a short, readable date/time. */
 function formatDate(ms) {
-  const d = new Date(ms);
-  return d.toLocaleString(undefined, {
+  return new Date(ms).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -268,6 +489,15 @@ function shortUrl(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    return url;
+    return url || "";
   }
+}
+
+/** Pick a stable, pleasant colour for a site's letter-avatar. */
+function avatarColor(seed) {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) % 360;
+  }
+  return `hsl(${hash}, 55%, 45%)`;
 }

@@ -2,28 +2,35 @@
 <!--
   popup.html
   ----------------------------------------------------------------
-  This is the little window that opens when you click the toolbar
-  icon. It has three parts:
-    1) a "save this page" area with a tags box,
-    2) a search box + tag filter,
-    3) the list of saved cards.
-  The look comes from popup.css and the behaviour from popup.js.
+  The window that opens when you click the toolbar icon. Parts:
+    1) header with logo, title, card count, and export/import buttons,
+    2) a "save this page" area with tags + an optional note,
+    3) search + tag filter + sort,
+    4) the list of saved cards (or a friendly empty state).
+  Look = popup.css, behaviour = popup.js.
 -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Fixed width so the popup is a comfortable size. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Quick Capture</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
+    <!-- 1) HEADER -->
     <header class="header">
       <img src="../../icons/icon-48.png" alt="" class="logo" />
       <h1>Quick Capture</h1>
+      <span id="count" class="count" title="Saved cards">0</span>
+      <div class="header-actions">
+        <button id="export-btn" class="icon-btn" type="button" title="Export cards to a file">⤓</button>
+        <button id="import-btn" class="icon-btn" type="button" title="Import cards from a file">⤒</button>
+        <!-- Hidden file picker used by the Import button. -->
+        <input id="import-file" type="file" accept="application/json,.json" hidden />
+      </div>
     </header>
 
-    <!-- 1) SAVE AREA -->
+    <!-- 2) SAVE AREA -->
     <section class="capture">
       <input
         id="tags-input"
@@ -31,27 +38,61 @@
         placeholder="tags, comma separated (e.g. competitor, bug)"
         autocomplete="off"
       />
-      <button id="save-btn" type="button">Save this page</button>
+      <input
+        id="note-input"
+        type="text"
+        placeholder="add a note (optional)"
+        autocomplete="off"
+      />
+      <button id="save-btn" type="button">＋ Save this page</button>
       <p id="capture-hint" class="hint">
-        Tip: highlight text on the page first to save it with the card.
+        Tip: highlight text on the page first, or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> anywhere.
       </p>
     </section>
 
-    <!-- 2) SEARCH + FILTER -->
+    <!-- 3) SEARCH + FILTER + SORT -->
     <section class="controls">
       <input id="search" type="search" placeholder="Search cards…" autocomplete="off" />
       <select id="tag-filter" aria-label="Filter by tag">
         <option value="">All tags</option>
       </select>
+      <select id="sort" aria-label="Sort cards">
+        <option value="newest">Newest</option>
+        <option value="oldest">Oldest</option>
+      </select>
     </section>
 
-    <!-- 3) CARD LIST -->
+    <!-- 4) CARD LIST -->
     <main>
-      <p id="empty" class="empty" hidden>No cards yet. Save this page to get started!</p>
+      <!-- Friendly empty state (shown when there are no cards at all). -->
+      <div id="empty" class="empty" hidden>
+        <svg class="empty-art" viewBox="0 0 120 120" width="96" height="96" aria-hidden="true">
+          <rect x="26" y="20" width="60" height="76" rx="8" fill="var(--chip-bg)" />
+          <rect x="34" y="16" width="60" height="76" rx="8" fill="var(--card-bg)" stroke="var(--blue)" stroke-width="2" />
+          <line x1="44" y1="34" x2="84" y2="34" stroke="var(--blue)" stroke-width="3" stroke-linecap="round" />
+          <line x1="44" y1="46" x2="76" y2="46" stroke="var(--border-strong)" stroke-width="3" stroke-linecap="round" />
+          <line x1="44" y1="58" x2="80" y2="58" stroke="var(--border-strong)" stroke-width="3" stroke-linecap="round" />
+          <circle cx="90" cy="86" r="16" fill="var(--blue)" />
+          <path d="M83 86 h14 M90 79 v14" stroke="#fff" stroke-width="3" stroke-linecap="round" />
+        </svg>
+        <p class="empty-title">No cards yet</p>
+        <p class="empty-sub">Capture your first insight to see it here.</p>
+        <ul class="empty-tips">
+          <li>Click <strong>＋ Save this page</strong> above</li>
+          <li>Highlight text → right-click → <strong>Save to Quick Capture</strong></li>
+          <li>Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> on any page</li>
+        </ul>
+      </div>
+
+      <!-- Shown when cards exist but none match the search/filter. -->
+      <p id="no-results" class="empty" hidden>No cards match your search.</p>
+
       <ul id="cards" class="cards"></ul>
     </main>
 
-    <!-- type="module" lets popup.js import our shared storage helpers. -->
+    <!-- Toast messages appear here (e.g. "Copied!"). -->
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
     <script type="module" src="popup.js"></script>
   </body>
 </html>

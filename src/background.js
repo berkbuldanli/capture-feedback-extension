@@ -1,12 +1,13 @@
 // background.js
 // ------------------------------------------------------------------
 // The "background service worker": an invisible helper that the browser
-// wakes up when something happens (like a right-click menu click).
-// It does NOT have a visible window.
+// wakes up when something happens (a right-click menu click, or the
+// keyboard shortcut). It does NOT have a visible window.
 //
-// Its jobs in version 1:
+// Its jobs:
 //   1. Create the "Save to Quick Capture" right-click menu item.
-//   2. When that menu item is clicked on selected text, save a card.
+//   2. Save a card when that menu item is clicked on selected text.
+//   3. Save the current page when the keyboard shortcut is pressed.
 // ------------------------------------------------------------------
 
 import { addCard } from "./lib/storage.js";
@@ -15,50 +16,78 @@ import { addCard } from "./lib/storage.js";
 const MENU_ID = "quick-capture-save-selection";
 
 // ------------------------------------------------------------------
-// 1) Create the right-click menu item.
-// `onInstalled` runs once when the extension is installed or updated,
-// which is the correct place to register context menus.
+// 1) Create the right-click menu item (runs on install/update).
 // ------------------------------------------------------------------
 chrome.runtime.onInstalled.addListener(() => {
   // Remove any old copy first so we never create duplicates.
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_ID,
-      title: 'Save to Quick Capture',
-      // "selection" means this item only appears when the user has
-      // highlighted some text — exactly the flow you described.
+      title: "Save to Quick Capture",
+      // "selection" means this item only appears when text is highlighted.
       contexts: ["selection"],
     });
   });
 });
 
 // ------------------------------------------------------------------
-// 2) Handle clicks on the menu item.
-// `info` describes what was clicked (including the selected text).
-// `tab` describes the page it happened on (title + URL).
+// 2) Handle clicks on the right-click menu item.
 // ------------------------------------------------------------------
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  // Ignore clicks on menu items that aren't ours.
   if (info.menuItemId !== MENU_ID) return;
 
   await addCard({
     title: tab?.title || "",
     url: tab?.url || info.pageUrl || "",
     text: info.selectionText || "",
-    tags: [], // right-click saves have no tags; add tags later in the popup
+    tags: [],
   });
 
-  // Give a small visual confirmation on the toolbar icon (a "1" badge
-  // that fades away). This is optional polish, not core logic.
+  flashBadge();
+});
+
+// ------------------------------------------------------------------
+// 3) Handle the keyboard shortcut (defined as "quick-save" in the
+// manifest). This saves the current page — including any highlighted
+// text — without even opening the popup.
+// ------------------------------------------------------------------
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== "quick-save") return;
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
+
+  await addCard({
+    title: tab.title || "",
+    url: tab.url || "",
+    text: await getSelectionText(tab.id),
+    tags: [],
+  });
+
   flashBadge();
 });
 
 /**
- * Briefly show a green badge on the toolbar icon to confirm a save.
+ * Ask a page for any highlighted text. Returns "" if nothing is
+ * selected or the page blocks scripts (e.g. chrome:// pages).
+ */
+async function getSelectionText(tabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => window.getSelection().toString(),
+    });
+    return results?.[0]?.result || "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Briefly show a green check badge on the toolbar icon to confirm a save.
  */
 function flashBadge() {
   chrome.action.setBadgeBackgroundColor({ color: "#16a34a" }); // green
   chrome.action.setBadgeText({ text: "✓" });
-  // Clear it after a moment.
   setTimeout(() => chrome.action.setBadgeText({ text: "" }), 1500);
 }
