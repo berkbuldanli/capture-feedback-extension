@@ -1,0 +1,12 @@
+# Operating system junk files
+.DS_Store
+Thumbs.db
+
+# Editor settings
+.vscode/
+.idea/
+
+# Node / build tools (not used yet, but ignored in advance)
+node_modules/
+dist/
+*.zip

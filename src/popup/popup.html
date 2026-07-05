@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<!--
+  popup.html
+  ----------------------------------------------------------------
+  This is the little window that opens when you click the toolbar
+  icon. It has three parts:
+    1) a "save this page" area with a tags box,
+    2) a search box + tag filter,
+    3) the list of saved cards.
+  The look comes from popup.css and the behaviour from popup.js.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Fixed width so the popup is a comfortable size. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quick Capture</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <img src="../../icons/icon-48.png" alt="" class="logo" />
+      <h1>Quick Capture</h1>
+    </header>
+
+    <!-- 1) SAVE AREA -->
+    <section class="capture">
+      <input
+        id="tags-input"
+        type="text"
+        placeholder="tags, comma separated (e.g. competitor, bug)"
+        autocomplete="off"
+      />
+      <button id="save-btn" type="button">Save this page</button>
+      <p id="capture-hint" class="hint">
+        Tip: highlight text on the page first to save it with the card.
+      </p>
+    </section>
+
+    <!-- 2) SEARCH + FILTER -->
+    <section class="controls">
+      <input id="search" type="search" placeholder="Search cards…" autocomplete="off" />
+      <select id="tag-filter" aria-label="Filter by tag">
+        <option value="">All tags</option>
+      </select>
+    </section>
+
+    <!-- 3) CARD LIST -->
+    <main>
+      <p id="empty" class="empty" hidden>No cards yet. Save this page to get started!</p>
+      <ul id="cards" class="cards"></ul>
+    </main>
+
+    <!-- type="module" lets popup.js import our shared storage helpers. -->
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

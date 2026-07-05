@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Quick Capture",
+  "version": "1.0.0",
+  "description": "Save any webpage (with selected text, title, URL, date) as a tagged card. Search, filter, and delete your captures. Everything stays local in your browser.",
+
+  "permissions": ["storage", "contextMenus", "activeTab", "scripting"],
+
+  "action": {
+    "default_title": "Quick Capture",
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "quick-capture@berkbuldanli.example",
+      "strict_min_version": "121.0"
+    }
+  }
+}
