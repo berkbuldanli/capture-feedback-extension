@@ -21,6 +21,9 @@ so it runs on both **Chrome** and **Firefox** from the same code.
 - **Export / Import** all your cards as a JSON file for backup or moving devices.
 - **Dark mode** that follows your system theme automatically.
 - A friendly **empty state** and coloured per-site avatars.
+- **Full-page dashboard** (⛶ button in the popup) with a tag sidebar + counts,
+  a multi-column board, live stats, and **bulk actions** — select many cards
+  and tag, copy, export, or delete them all at once.
 
 ---
 
@@ -31,13 +34,18 @@ capture-feedback-extension/
 ├── manifest.json          # The extension's "ID card" (name, permissions, files)
 ├── icons/                 # Toolbar icons (16, 48, 128 px)
 └── src/
-    ├── background.js       # Invisible helper: powers the right-click menu
+    ├── background.js       # Invisible helper: right-click menu + keyboard shortcut
     ├── lib/
-    │   └── storage.js      # Shared save/load functions (the "database" layer)
-    └── popup/
-        ├── popup.html      # The window that opens when you click the icon
-        ├── popup.css       # How the popup looks
-        └── popup.js        # How the popup behaves
+    │   ├── storage.js      # Shared save/load functions (the "database" layer)
+    │   └── format.js       # Shared formatting helpers (dates, avatars, Markdown)
+    ├── popup/
+    │   ├── popup.html      # The window that opens when you click the icon
+    │   ├── popup.css       # How the popup looks
+    │   └── popup.js        # How the popup behaves
+    └── dashboard/
+        ├── dashboard.html  # The full-page workspace (opens in its own tab)
+        ├── dashboard.css   # How the dashboard looks
+        └── dashboard.js    # How the dashboard behaves
 ```
 
 ---

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<!--
+  dashboard.html
+  ----------------------------------------------------------------
+  The full-page "workspace" view, opened in its own browser tab.
+  Unlike the small popup, this has room for:
+    - a left sidebar to filter by tag (with counts) + stats,
+    - a multi-column board of cards,
+    - bulk actions (select many cards, then tag/copy/export/delete).
+  Look = dashboard.css, behaviour = dashboard.js.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quick Capture — Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css" />
+  </head>
+  <body>
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="brand">
+        <img src="../../icons/icon-48.png" alt="" class="logo" />
+        <span>Quick Capture</span>
+      </div>
+      <input id="search" type="search" class="search" placeholder="Search all cards…" autocomplete="off" />
+      <div class="topbar-actions">
+        <label class="sort-label">
+          Sort
+          <select id="sort" aria-label="Sort cards">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="title">Title A–Z</option>
+          </select>
+        </label>
+        <button id="export-btn" class="btn" type="button">⤓ Export</button>
+        <button id="import-btn" class="btn" type="button">⤒ Import</button>
+        <input id="import-file" type="file" accept="application/json,.json" hidden />
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- LEFT SIDEBAR: filters + stats -->
+      <aside class="sidebar">
+        <nav id="filters" class="filters">
+          <!-- Filled in by dashboard.js -->
+        </nav>
+        <div class="stats" id="stats"><!-- Filled in by dashboard.js --></div>
+      </aside>
+
+      <!-- MAIN: bulk toolbar + card board -->
+      <main class="main">
+        <div class="bulkbar">
+          <label class="check">
+            <input type="checkbox" id="select-all" />
+            <span id="selection-label">Select all</span>
+          </label>
+          <div id="bulk-actions" class="bulk-actions" hidden>
+            <button class="btn" data-bulk="tag" type="button">＋ Tag</button>
+            <button class="btn" data-bulk="copy" type="button">⧉ Copy</button>
+            <button class="btn" data-bulk="export" type="button">⤓ Export</button>
+            <button class="btn danger" data-bulk="delete" type="button">🗑 Delete</button>
+            <button class="btn ghost" data-bulk="clear" type="button">Clear</button>
+          </div>
+        </div>
+
+        <!-- Empty states -->
+        <div id="empty" class="empty" hidden>
+          <p class="empty-title">No cards yet</p>
+          <p class="empty-sub">Capture pages from the toolbar popup, the right-click menu, or Alt+Shift+S.</p>
+        </div>
+        <p id="no-results" class="empty" hidden>No cards match your search or filter.</p>
+
+        <section id="board" class="board"></section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="dashboard.js"></script>
+  </body>
+</html>

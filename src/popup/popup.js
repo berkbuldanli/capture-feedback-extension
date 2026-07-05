@@ -15,6 +15,13 @@ import {
   exportCardsJSON,
   importCardsJSON,
 } from "../lib/storage.js";
+import {
+  formatDate,
+  shortUrl,
+  avatarColor,
+  avatarLetter,
+  markdownForCard,
+} from "../lib/format.js";
 
 // Grab the elements we'll use, once, up front.
 const tagsInput = document.getElementById("tags-input");
@@ -27,6 +34,7 @@ const cardsList = document.getElementById("cards");
 const emptyState = document.getElementById("empty");
 const noResults = document.getElementById("no-results");
 const countBadge = document.getElementById("count");
+const dashboardBtn = document.getElementById("dashboard-btn");
 const exportBtn = document.getElementById("export-btn");
 const importBtn = document.getElementById("import-btn");
 const importFile = document.getElementById("import-file");
@@ -56,6 +64,12 @@ async function init() {
   exportBtn.addEventListener("click", onExport);
   importBtn.addEventListener("click", () => importFile.click());
   importFile.addEventListener("change", onImport);
+
+  // Open the roomy full-page dashboard in a new browser tab.
+  dashboardBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("src/dashboard/dashboard.html") });
+    window.close(); // close the little popup once the dashboard opens
+  });
 }
 
 // ------------------------------------------------------------------
@@ -228,7 +242,7 @@ function buildCardElement(card) {
   const avatar = document.createElement("div");
   avatar.className = "avatar";
   const domain = shortUrl(card.url);
-  avatar.textContent = (domain[0] || card.title[0] || "•");
+  avatar.textContent = avatarLetter(card);
   avatar.style.background = avatarColor(domain || card.title);
   head.appendChild(avatar);
 
@@ -373,14 +387,8 @@ function buildActions(card, items) {
 // Notion, Google Docs, Slack, etc.).
 // ------------------------------------------------------------------
 async function copyAsMarkdown(card) {
-  const lines = [`### ${card.title}`, card.url];
-  if (card.text) lines.push("", `> ${card.text.replace(/\n/g, "\n> ")}`);
-  if (card.note) lines.push("", `_${card.note}_`);
-  if (card.tags.length) lines.push("", card.tags.map((t) => `#${t}`).join(" "));
-  lines.push("", `_Saved ${formatDate(card.createdAt)}_`);
-
   try {
-    await navigator.clipboard.writeText(lines.join("\n"));
+    await navigator.clipboard.writeText(markdownForCard(card));
     toast("Copied as Markdown");
   } catch {
     toast("Couldn't copy");
@@ -468,36 +476,4 @@ function toast(message) {
   toastEl.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (toastEl.hidden = true), 1800);
-}
-
-// ------------------------------------------------------------------
-// Small formatting helpers.
-// ------------------------------------------------------------------
-
-/** Turn a millisecond timestamp into a short, readable date/time. */
-function formatDate(ms) {
-  return new Date(ms).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-/** Show just the site's domain instead of the whole long URL. */
-function shortUrl(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url || "";
-  }
-}
-
-/** Pick a stable, pleasant colour for a site's letter-avatar. */
-function avatarColor(seed) {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = (hash * 31 + seed.charCodeAt(i)) % 360;
-  }
-  return `hsl(${hash}, 55%, 45%)`;
 }
