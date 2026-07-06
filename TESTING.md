@@ -244,6 +244,22 @@ Then reload the page.
 
 ---
 
+## 8b. Security (untrusted import)
+
+**8b.1 Malicious import is neutralised**
+- Steps: Create a file `evil.json` with this content, then **Import** it:
+  ```json
+  {"app":"quick-capture","version":2,
+   "cards":[{"id":"e1","title":"Click me","url":"javascript:alert(document.cookie)"}]}
+  ```
+- [ ] Expected: The card imports, but its title is **plain text (not a link)** and clicking it does nothing. No alert/popup appears. (URLs that aren't `http(s)` are dropped on import.)
+
+**8b.2 No script execution from card text**
+- Steps: Import a card whose note/tags contain `<script>alert(1)</script>`.
+- [ ] Expected: The text shows literally as characters; no alert runs.
+
+---
+
 ## 9. Cross-browser sanity (Firefox)
 
 Repeat these core scenarios in Firefox: **2.1, 2.4, 2.5, 3.1, 5.1, 6.1/6.2**.

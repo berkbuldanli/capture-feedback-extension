@@ -24,6 +24,8 @@ import {
   avatarColor,
   avatarLetter,
   markdownForCard,
+  safeUrl,
+  isImageDataUrl,
 } from "../lib/format.js";
 import { initTheme, themeMeta, nextTheme, saveTheme } from "../lib/theme.js";
 
@@ -327,13 +329,21 @@ function renderStats() {
   const tagSet = new Set();
   for (const c of allCards) for (const t of c.tags) tagSet.add(t);
   const withText = allCards.filter((c) => c.text).length;
+
+  // Build with DOM nodes (no innerHTML) so this stays safe even if the
+  // labels ever include text rather than plain numbers.
   statsEl.replaceChildren();
-  const lines = [
-    `<b>${allCards.length}</b> cards`,
-    `<b>${tagSet.size}</b> tags`,
-    `<b>${withText}</b> with a quote`,
+  const parts = [
+    [allCards.length, "cards"],
+    [tagSet.size, "tags"],
+    [withText, "with a quote"],
   ];
-  statsEl.innerHTML = lines.join(" · "); // numbers only — safe, no user text
+  parts.forEach(([n, label], i) => {
+    if (i > 0) statsEl.append(" · ");
+    const b = document.createElement("b");
+    b.textContent = String(n);
+    statsEl.append(b, " " + label);
+  });
 }
 
 // ---- Bulk toolbar ----------------------------------------------------
@@ -358,8 +368,8 @@ function buildCard(card) {
     "card" + (card.pinned ? " pinned" : "") + (selected.has(card.id) ? " selected" : "");
   el.dataset.id = card.id;
 
-  // Screenshot thumbnail (only when the card has one and isn't being edited).
-  if (card.thumb && editingId !== card.id) {
+  // Screenshot thumbnail (only for a real image, and not while editing).
+  if (isImageDataUrl(card.thumb) && editingId !== card.id) {
     const img = document.createElement("img");
     img.className = "card-thumb";
     img.src = card.thumb;
@@ -389,12 +399,17 @@ function buildCard(card) {
   headings.className = "card-headings";
   const title = document.createElement("p");
   title.className = "card-title";
-  const link = document.createElement("a");
-  link.href = card.url || "#";
-  link.target = "_blank";
-  link.rel = "noopener";
-  link.textContent = card.title;
-  title.appendChild(link);
+  const safe = safeUrl(card.url);
+  if (safe) {
+    const link = document.createElement("a");
+    link.href = safe;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = card.title;
+    title.appendChild(link);
+  } else {
+    title.textContent = card.title; // unsafe/missing URL → not clickable
+  }
   headings.appendChild(title);
   const meta = document.createElement("p");
   meta.className = "card-meta";

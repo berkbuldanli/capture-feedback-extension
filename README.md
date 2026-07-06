@@ -124,6 +124,12 @@ Listing copy and promo images live in `store/` (see `store/listing.md`).
 See **[TESTING.md](TESTING.md)** for a full manual QA plan with step-by-step
 scenarios and a quick regression checklist.
 
+## Security
+
+See **[SECURITY.md](SECURITY.md)** for the security posture: minimal
+permissions, no network access, a strict Content Security Policy, and how
+untrusted import files are sanitised. Everything stays on your device.
+
 ---
 
 ## Notes

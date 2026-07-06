@@ -6,6 +6,10 @@
 
   "permissions": ["storage", "unlimitedStorage", "contextMenus", "activeTab", "scripting"],
 
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'self'"
+  },
+
   "action": {
     "default_title": "Quick Capture",
     "default_popup": "src/popup/popup.html",

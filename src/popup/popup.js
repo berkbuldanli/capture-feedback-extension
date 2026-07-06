@@ -25,6 +25,8 @@ import {
   avatarColor,
   avatarLetter,
   markdownForCard,
+  safeUrl,
+  isImageDataUrl,
 } from "../lib/format.js";
 import { captureThumbnail } from "../lib/capture.js";
 import { initTheme, themeMeta, nextTheme, saveTheme } from "../lib/theme.js";
@@ -337,8 +339,8 @@ function buildCardElement(card) {
   const li = document.createElement("li");
   li.className = "card" + (card.pinned ? " pinned" : "");
 
-  // --- Screenshot thumbnail (only if the card has one) ---
-  if (card.thumb && editingId !== card.id) {
+  // --- Screenshot thumbnail (only if the card has a real image) ---
+  if (isImageDataUrl(card.thumb) && editingId !== card.id) {
     const img = document.createElement("img");
     img.className = "card-thumb";
     img.src = card.thumb;
@@ -363,12 +365,18 @@ function buildCardElement(card) {
 
   const title = document.createElement("p");
   title.className = "card-title";
-  const link = document.createElement("a");
-  link.href = card.url || "#";
-  link.target = "_blank";
-  link.rel = "noopener";
-  link.textContent = card.title;
-  title.appendChild(link);
+  const safe = safeUrl(card.url);
+  if (safe) {
+    const link = document.createElement("a");
+    link.href = safe;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = card.title;
+    title.appendChild(link);
+  } else {
+    // Unsafe or missing URL → show the title as plain, non-clickable text.
+    title.textContent = card.title;
+  }
   headings.appendChild(title);
 
   const meta = document.createElement("p");

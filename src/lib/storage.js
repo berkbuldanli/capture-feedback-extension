@@ -13,6 +13,8 @@
 // `chrome.*` namespace, so this file works on both browsers unchanged.
 // ------------------------------------------------------------------
 
+import { safeUrl, isImageDataUrl, safeColor } from "./format.js";
+
 const CARDS_KEY = "cards";
 const COLLECTIONS_KEY = "collections";
 const SETTINGS_KEY = "settings";
@@ -233,10 +235,12 @@ export async function importCardsJSON(jsonText) {
     for (const raw of data.collections) {
       if (raw && typeof raw === "object" && raw.id && !ids.has(raw.id)) {
         ids.add(raw.id);
+        const name = str(raw.name) || "Untitled";
         collections.push({
           id: String(raw.id),
-          name: str(raw.name) || "Untitled",
-          color: str(raw.color) || pickColor(str(raw.name)),
+          name,
+          // Reject unsafe colour strings; fall back to a generated one.
+          color: safeColor(raw.color) || pickColor(name),
           createdAt: Number(raw.createdAt) || Date.now(),
         });
       }
@@ -262,18 +266,25 @@ export async function importCardsJSON(jsonText) {
   return { added, skipped };
 }
 
-/** Make sure an imported object has every field with a safe value. */
+/**
+ * Make sure an imported object has every field with a safe value.
+ * Imported files are untrusted, so we neutralise dangerous URLs
+ * (e.g. `javascript:` links) and non-image thumbnails here.
+ */
 function sanitizeCard(raw) {
   const obj = raw && typeof raw === "object" ? raw : {};
+  const rawUrl = str(obj.url);
   return {
     id: typeof obj.id === "string" && obj.id ? obj.id : newId(),
-    title: str(obj.title) || str(obj.url) || "Untitled",
-    url: str(obj.url),
+    title: str(obj.title) || rawUrl || "Untitled",
+    // Keep only safe http(s) links; drop anything else (javascript:, data:, …).
+    url: safeUrl(rawUrl),
     text: str(obj.text),
     note: str(obj.note),
     tags: cleanTags(obj.tags || []),
     collectionId: obj.collectionId ? String(obj.collectionId) : null,
-    thumb: typeof obj.thumb === "string" ? obj.thumb : "",
+    // Only accept real image data URLs as a thumbnail.
+    thumb: isImageDataUrl(obj.thumb) ? obj.thumb : "",
     pinned: Boolean(obj.pinned),
     createdAt: Number(obj.createdAt) || Date.now(),
   };
