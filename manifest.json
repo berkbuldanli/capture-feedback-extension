@@ -3,6 +3,8 @@
   "name": "Quick Capture",
   "version": "2.0.0",
   "description": "Save any webpage as a tagged card with notes, screenshots, and collections. Search, filter, and organise your captures. Everything stays local in your browser.",
+  "author": "Berk Buldanli",
+  "homepage_url": "https://github.com/berkbuldanli/capture-feedback-extension",
 
   "permissions": ["storage", "unlimitedStorage", "contextMenus", "activeTab", "scripting"],
 

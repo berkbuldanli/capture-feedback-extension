@@ -69,6 +69,6 @@ any website.
 
 ## Assets in this folder
 - `promo-small.png` — 440×280 promo tile
-- `screenshot-dashboard.png` — 1280×800 store screenshot
+- `screenshot-1-capture.png` … `screenshot-4-dark.png` — 1280×800 store screenshots
 - `promo.html` — source for the promo tile
-- (Regenerate images with `node scripts/make-store-assets.mjs`.)
+- (Regenerate all images with `node scripts/make-store-assets.mjs`.)

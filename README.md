@@ -115,7 +115,11 @@ node scripts/build.mjs
 
 This creates `dist/quick-capture-v<version>.zip` containing only the files the
 extension needs. Upload that to the Chrome Web Store or Firefox Add-ons.
-Listing copy and promo images live in `store/` (see `store/listing.md`).
+
+**Going live?** Follow **[store/SUBMISSION.md](store/SUBMISSION.md)** — a
+step-by-step checklist for both stores with the exact fields, permission
+justifications, and privacy answers to paste. Listing copy and images are in
+`store/` (`store/listing.md`), and the privacy policy is **[PRIVACY.md](PRIVACY.md)**.
 
 ---
 
